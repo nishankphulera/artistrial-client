@@ -1,0 +1,57 @@
+      case "business-reports":
+        return (
+          <div
+            className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}
+          >
+            {renderPageHeader("business-reports")}
+            <div className={isDarkMode ? "bg-[#171717]" : ""}>
+              <BusinessReports isDashboardDarkMode={isDarkMode} />
+            </div>
+          </div>
+        );
+
+      // Leads Module Cases  
+      case "leads-stream":
+        return (
+          <div
+            className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}
+          >
+            {renderPageHeader("leads-stream")}
+            <div className={isDarkMode ? "bg-[#171717]" : ""}>
+              <LeadsStream isDashboardDarkMode={isDarkMode} />
+            </div>
+          </div>
+        );
+      case "captured-leads":
+        return (
+          <div
+            className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}
+          >
+            {renderPageHeader("captured-leads")}
+            <div className={isDarkMode ? "bg-[#171717]" : ""}>
+              <CapturedLeads isDashboardDarkMode={isDarkMode} />
+            </div>
+          </div>
+        );
+      case "leads-analytics":
+        return (
+          <div
+            className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}
+          >
+            {renderPageHeader("leads-analytics")}
+            <div className={isDarkMode ? "bg-[#171717]" : ""}>
+              <LeadsAnalytics isDashboardDarkMode={isDarkMode} />
+            </div>
+          </div>
+        );
+      case "leads-settings":
+        return (
+          <div
+            className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}
+          >
+            {renderPageHeader("leads-settings")}
+            <div className={isDarkMode ? "bg-[#171717]" : ""}>
+              <LeadsSettings isDashboardDarkMode={isDarkMode} />
+            </div>
+          </div>
+        );

@@ -1,0 +1,7 @@
+// Integration needed at the end of index.tsx:
+
+// Mount collaboration routes
+app.route('/make-server-f6985a91', collaborationsApp);
+
+// Start the server
+Deno.serve(app.fetch);
