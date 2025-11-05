@@ -107,7 +107,7 @@ export const AssetDetailPage: React.FC<AssetDetailPageProps> = ({
         previewUrl: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1200&h=900&fit=crop',
         fileSize: '15.8 MB',
         fileFormat: 'PSD, PNG, JPG',
-        dimensions: '4000 × 3000 px',
+        dimensions: '4000 × 3001 px',
         downloads: 1247,
         rating: 4.7,
         totalReviews: 89,

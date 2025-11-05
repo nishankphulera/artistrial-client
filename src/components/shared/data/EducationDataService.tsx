@@ -1,4 +1,4 @@
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
+// Removed Supabase import - using local API instead
 
 export interface EducationListing {
   id: string;
@@ -203,18 +203,58 @@ export const useEducationData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/education?${params}`,
+        `http://localhost:5001/api/education?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.courses && data.courses.length > 0) {
-          return processFilteredData(data.courses, filters, context);
+        if (data && data.length > 0) {
+          // Transform server data to match our interface
+          const transformedData = data.map((course: any) => {
+            console.log('Processing course:', course.title, 'Rating:', course.average_rating, 'Reviews:', course.total_ratings);
+            return {
+            id: course.id.toString(),
+            title: course.title,
+            instructor: course.display_name || course.username || 'Unknown Instructor',
+            instructorAvatar: course.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+            category: course.category,
+            subcategory: course.subcategory || '',
+            format: course.format || 'online',
+            level: course.level || 'beginner',
+            duration: course.duration || '8 weeks',
+            price: course.price || 0,
+            currency: 'USD',
+            location: course.location,
+            maxStudents: course.max_students || 25,
+            currentStudents: Math.floor(Math.random() * (course.max_students || 25)),
+            rating: course.average_rating ? parseFloat(course.average_rating) : 0, // Real rating from API
+            totalReviews: course.total_ratings ? parseInt(course.total_ratings.toString()) : 0, // Real review count from API
+            description: course.description,
+            curriculum: course.curriculum || [],
+            materials: course.materials || [],
+            requirements: course.prerequisites ? [course.prerequisites] : [],
+            thumbnail: course.thumbnail_url || 'https://images.unsplash.com/photo-1606983340126-99ab4feaa64a?w=400&h=300&fit=crop',
+            schedule: {
+              startDate: course.start_date || new Date().toISOString().split('T')[0],
+              endDate: course.end_date || new Date(Date.now() + 8 * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              sessions: [
+                { day: 'Tuesday', time: '7:00 PM' },
+                { day: 'Thursday', time: '7:00 PM' },
+              ],
+            },
+            status: course.status || 'active',
+            isOwner: context.userId ? course.user_id === context.userId : false,
+            userId: course.user_id?.toString(),
+            enrollments: Math.floor(Math.random() * 20) + 5,
+            earnings: Math.floor(Math.random() * 5000) + 1000,
+          };
+          });
+          return processFilteredData(transformedData, filters, context);
         }
       }
     } catch (error) {

@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -19,6 +21,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { ImageWithFallback } from '../../figma/ImageWithFallback';
+import { formatPriceINR } from '@/utils/currency';
 import { FilterSidebar, FilterConfig, FilterState } from '../../shared/FilterSidebar';
 import { AssetSearchFilters } from '../../shared/AssetSearchFilters';
 import { UserProfileLink } from '../../shared/UserProfileLink';
@@ -339,23 +342,25 @@ export const AssetMarketplaceAdmin: React.FC<AssetMarketplaceAdminProps> = ({
                   "space-y-4"
                 }>
                   {filteredAssets.map((asset) => (
-                    <Card key={asset.id} className={`overflow-hidden hover:shadow-lg transition-shadow ${
-                      viewMode === 'list' ? 'flex flex-row' : ''
+                    <Card key={asset.id} className={`overflow-hidden hover:shadow-lg transition-shadow flex flex-col ${
+                      viewMode === 'list' ? 'flex-row' : ''
                     }`}>
-                      <div className={viewMode === 'list' ? 'w-48 flex-shrink-0' : 'aspect-square'}>
+                      <div className={`${viewMode === 'list' ? 'w-48 flex-shrink-0' : 'w-full'} aspect-square overflow-hidden bg-gray-100`}>
                         <ImageWithFallback
                           src={asset.imageUrl || 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop'}
                           alt={asset.title}
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <CardContent className={`${viewMode === 'list' ? 'flex-1 flex flex-col justify-between' : ''} p-4`}>
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className={`font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>{asset.title}</h3>
+                      <CardContent className={`${viewMode === 'list' ? 'flex-1 flex flex-col justify-between' : 'flex-1 flex flex-col'} p-4`}>
+                        <div className="flex-1 flex flex-col">
+                          <div className="flex items-start justify-between mb-2 gap-2">
+                            <h3 className={`font-semibold line-clamp-2 flex-1 ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`} title={asset.title}>
+                              {asset.title}
+                            </h3>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                <Button variant="ghost" className="h-8 w-8 p-0 flex-shrink-0">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -379,7 +384,7 @@ export const AssetMarketplaceAdmin: React.FC<AssetMarketplaceAdminProps> = ({
                             </DropdownMenu>
                           </div>
                           
-                          <p className="text-sm text-gray-600 mb-2">by <UserProfileLink 
+                          <p className={`text-sm mb-2 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>by <UserProfileLink 
                              userId={asset.artist.id}
                              userName={asset.artist.name}
                              prefix=""
@@ -396,25 +401,27 @@ export const AssetMarketplaceAdmin: React.FC<AssetMarketplaceAdminProps> = ({
                               {asset.status}
                             </Badge>
                           </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap gap-1">
-                            {asset.tags.slice(0, 3).map((tag, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
+                          
+                          <div className="flex flex-wrap gap-1 min-h-[24px] mb-3">
+                            {asset.tags && asset.tags.length > 0 ? (
+                              asset.tags.slice(0, 3).map((tag, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))
+                            ) : (
+                              <div className="h-0"></div>
+                            )}
                           </div>
+                        </div>
 
-                          <div className="flex items-center justify-between pt-3 border-t">
-                            <span className="text-lg font-title text-[#FF8D28]">
-                              ${asset.price}
-                            </span>
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
-                              <Eye className="h-3 w-3" />
-                              {asset.views || 0}
-                            </div>
+                        <div className="flex items-center justify-between pt-3 border-t mt-auto">
+                          <span className={`text-lg font-title text-[#FF8D28] ${isDashboardDarkMode ? 'text-[#FF8D28]' : ''}`}>
+                            {formatPriceINR(parseFloat(asset.price), true)}
+                          </span>
+                          <div className={`flex items-center gap-2 text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            <Eye className="h-3 w-3" />
+                            {asset.views || 0}
                           </div>
                         </div>
                       </CardContent>

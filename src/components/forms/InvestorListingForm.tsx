@@ -9,68 +9,65 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, TrendingUp, DollarSign, Target, Users } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 
 interface InvestorFormData {
-  title: string;
-  listingType: 'seeking-investment' | 'offering-investment';
-  projectType: string;
-  description: string;
-  fundingGoal: string;
-  minimumInvestment: string;
-  maximumInvestment: string;
-  equityOffered: string;
-  expectedReturn: string;
-  timeline: string;
-  stage: string;
-  industry: string[];
-  riskLevel: string;
-  investmentType: string;
-  useOfFunds: string[];
-  targetMarket: string;
-  businessModel: string;
-  traction: string;
-  teamSize: string;
+  company_name: string;
+  bio: string;
+  investment_focus: string;
+  website: string;
+  investment_types: string[];
+  investment_range_min: string;
+  investment_range_max: string;
+  investment_focus_areas: string[];
+  preferred_stages: string[];
+  geographic_focus: string[];
+  portfolio_companies: string[];
+  contact_email: string;
+  phone: string;
   location: string;
-  documents: File[];
-  pitchDeck: File[];
-  requiresAccreditation: boolean;
-  isPublic: boolean;
-  allowsPartialFunding: boolean;
-  hasExitStrategy: boolean;
+  years_experience: string;
+  certifications: string[];
+  languages: string[];
+  minimum_investment: string;
+  maximum_investment: string;
+  investment_terms: string;
+  portfolio_url: string;
+  linkedin_url: string;
+  twitter_url: string;
+  instagram_url: string;
+  website_url: string;
 }
 
 export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
   const [formData, setFormData] = useState<InvestorFormData>({
-    title: '',
-    listingType: 'seeking-investment',
-    projectType: '',
-    description: '',
-    fundingGoal: '',
-    minimumInvestment: '',
-    maximumInvestment: '',
-    equityOffered: '',
-    expectedReturn: '',
-    timeline: '',
-    stage: '',
-    industry: [],
-    riskLevel: '',
-    investmentType: '',
-    useOfFunds: [],
-    targetMarket: '',
-    businessModel: '',
-    traction: '',
-    teamSize: '',
+    company_name: '',
+    bio: '',
+    investment_focus: '',
+    website: '',
+    investment_types: [],
+    investment_range_min: '',
+    investment_range_max: '',
+    investment_focus_areas: [],
+    preferred_stages: [],
+    geographic_focus: [],
+    portfolio_companies: [],
+    contact_email: '',
+    phone: '',
     location: '',
-    documents: [],
-    pitchDeck: [],
-    requiresAccreditation: false,
-    isPublic: true,
-    allowsPartialFunding: false,
-    hasExitStrategy: false
+    years_experience: '',
+    certifications: [],
+    languages: ['English'],
+    minimum_investment: '',
+    maximum_investment: '',
+    investment_terms: '',
+    portfolio_url: '',
+    linkedin_url: '',
+    twitter_url: '',
+    instagram_url: '',
+    website_url: ''
   });
   
   const [newIndustry, setNewIndustry] = useState('');
@@ -81,87 +78,80 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
   // Track form changes to detect unsaved changes
   useEffect(() => {
     const hasChanges = 
-      formData.title.trim() !== '' ||
-      formData.projectType !== '' ||
-      formData.description.trim() !== '' ||
-      formData.fundingGoal.trim() !== '' ||
-      formData.minimumInvestment.trim() !== '' ||
-      formData.maximumInvestment.trim() !== '' ||
-      formData.equityOffered.trim() !== '' ||
-      formData.expectedReturn.trim() !== '' ||
-      formData.timeline !== '' ||
-      formData.stage !== '' ||
-      formData.industry.length > 0 ||
-      formData.riskLevel !== '' ||
-      formData.investmentType !== '' ||
-      formData.useOfFunds.length > 0 ||
-      formData.targetMarket.trim() !== '' ||
-      formData.businessModel.trim() !== '' ||
-      formData.traction.trim() !== '' ||
-      formData.teamSize.trim() !== '' ||
+      formData.company_name.trim() !== '' ||
+      formData.bio.trim() !== '' ||
+      formData.investment_focus.trim() !== '' ||
+      formData.website.trim() !== '' ||
+      formData.investment_types.length > 0 ||
+      formData.investment_range_min.trim() !== '' ||
+      formData.investment_range_max.trim() !== '' ||
+      formData.investment_focus_areas.length > 0 ||
+      formData.preferred_stages.length > 0 ||
+      formData.geographic_focus.length > 0 ||
+      formData.portfolio_companies.length > 0 ||
+      formData.contact_email.trim() !== '' ||
+      formData.phone.trim() !== '' ||
       formData.location.trim() !== '' ||
-      formData.documents.length > 0 ||
-      formData.pitchDeck.length > 0 ||
-      formData.requiresAccreditation !== false ||
-      formData.isPublic !== true ||
-      formData.allowsPartialFunding !== false ||
-      formData.hasExitStrategy !== false;
+      formData.years_experience.trim() !== '' ||
+      formData.certifications.length > 0 ||
+      formData.languages.length > 1 || // More than just 'English'
+      formData.minimum_investment.trim() !== '' ||
+      formData.maximum_investment.trim() !== '' ||
+      formData.investment_terms.trim() !== '' ||
+      formData.portfolio_url.trim() !== '' ||
+      formData.linkedin_url.trim() !== '' ||
+      formData.twitter_url.trim() !== '' ||
+      formData.instagram_url.trim() !== '' ||
+      formData.website_url.trim() !== '';
 
     setHasUnsavedChanges(hasChanges);
   }, [formData]);
 
-  const projectTypes = [
-    'Startup',
-    'Art Project',
-    'Film/Video',
-    'Music/Audio',
-    'Tech Platform',
-    'Creative Agency',
-    'Art Gallery',
-    'Event Production',
-    'Product Development',
-    'Real Estate',
-    'Social Impact',
-    'Other'
+  const investmentTypes = [
+    'equity',
+    'debt',
+    'revenue_share',
+    'royalty',
+    'grants',
+    'loans'
+  ];
+
+  const focusAreas = [
+    'music',
+    'film',
+    'art',
+    'gaming',
+    'technology',
+    'media',
+    'publishing',
+    'fashion'
   ];
 
   const stages = [
-    'Idea Stage',
-    'Prototype/MVP',
-    'Early Revenue',
-    'Growth Stage',
-    'Scaling',
-    'Established Business'
+    'pre_seed',
+    'seed',
+    'series_a',
+    'series_b',
+    'series_c',
+    'growth',
+    'late_stage'
   ];
 
-  const investmentTypes = [
-    'Equity Investment',
-    'Debt Financing',
-    'Revenue Share',
-    'Convertible Note',
-    'Safe Note',
-    'Grant/Donation',
-    'Royalty Investment',
-    'Partnership'
+  const languages = [
+    'English',
+    'Spanish',
+    'French',
+    'German',
+    'Italian',
+    'Portuguese',
+    'Chinese',
+    'Japanese',
+    'Korean',
+    'Arabic',
+    'Russian'
   ];
 
-  const riskLevels = [
-    'Low Risk',
-    'Medium Risk',
-    'High Risk',
-    'Very High Risk'
-  ];
-
-  const timelineOptions = [
-    '3-6 months',
-    '6-12 months',
-    '1-2 years',
-    '2-5 years',
-    '5+ years',
-    'Ongoing'
-  ];
-
-  const addToArray = (field: 'industry' | 'useOfFunds', value: string, setter: (value: string) => void) => {
+  const addToArray = (field: 'investment_types' | 'investment_focus_areas' | 'preferred_stages' | 'geographic_focus' | 'portfolio_companies' | 'certifications' | 'languages', value: string, setter: (value: string) => void) => {
     if (value.trim() && !formData[field].includes(value.trim())) {
       setFormData(prev => ({
         ...prev,
@@ -171,21 +161,13 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
     }
   };
 
-  const removeFromArray = (field: 'industry' | 'useOfFunds', value: string) => {
+  const removeFromArray = (field: 'investment_types' | 'investment_focus_areas' | 'preferred_stages' | 'geographic_focus' | 'portfolio_companies' | 'certifications' | 'languages', value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: prev[field].filter(item => item !== value)
     }));
   };
 
-  const handleFileChange = (field: 'documents' | 'pitchDeck', files: FileList | null) => {
-    if (files) {
-      setFormData(prev => ({
-        ...prev,
-        [field]: Array.from(files)
-      }));
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,57 +176,54 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
     setIsSubmitting(true);
     
     try {
-      const token = localStorage.getItem('access_token');
-      
-      // Create FormData for file uploads
-      const formDataToSend = new FormData();
-      
-      // Add text fields
-      const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'investment',
-        fundingGoal: parseFloat(formData.fundingGoal) || 0,
-        minimumInvestment: parseFloat(formData.minimumInvestment) || 0,
-        maximumInvestment: parseFloat(formData.maximumInvestment) || 0,
-        status: 'active'
+      const investorData = {
+        user_id: user.id,
+        company_name: formData.company_name,
+        bio: formData.bio,
+        investment_focus: formData.investment_focus,
+        website: formData.website,
+        investment_types: formData.investment_types,
+        investment_range_min: formData.investment_range_min ? parseFloat(formData.investment_range_min) : undefined,
+        investment_range_max: formData.investment_range_max ? parseFloat(formData.investment_range_max) : undefined,
+        investment_focus_areas: formData.investment_focus_areas,
+        preferred_stages: formData.preferred_stages,
+        geographic_focus: formData.geographic_focus,
+        portfolio_companies: formData.portfolio_companies,
+        contact_email: formData.contact_email,
+        phone: formData.phone,
+        location: formData.location,
+        years_experience: formData.years_experience ? parseInt(formData.years_experience) : undefined,
+        certifications: formData.certifications,
+        languages: formData.languages,
+        minimum_investment: formData.minimum_investment ? parseFloat(formData.minimum_investment) : undefined,
+        maximum_investment: formData.maximum_investment ? parseFloat(formData.maximum_investment) : undefined,
+        investment_terms: formData.investment_terms,
+        portfolio_url: formData.portfolio_url,
+        linkedin_url: formData.linkedin_url,
+        twitter_url: formData.twitter_url,
+        instagram_url: formData.instagram_url,
+        website_url: formData.website_url
       };
 
-      // Remove file fields from listing data
-      const { documents, pitchDeck, ...textData } = listingData;
-      formDataToSend.append('data', JSON.stringify(textData));
-
-      // Add files
-      formData.documents.forEach(file => {
-        formDataToSend.append('documents', file);
+      const response = await fetch('http://localhost:5001/api/investors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(investorData),
       });
-      
-      formData.pitchDeck.forEach(file => {
-        formDataToSend.append('pitchDeck', file);
-      });
-
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/investor`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formDataToSend,
-        }
-      );
 
       if (response.ok) {
-        toast.success('Investment listing created successfully!');
-        setHasUnsavedChanges(false); // Clear unsaved changes flag
+        toast.success('Investor profile created successfully!');
+        setHasUnsavedChanges(false);
         if (onClose) onClose();
       } else {
         const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to create listing');
+        toast.error(errorData.error || 'Failed to create investor profile');
       }
     } catch (error) {
-      console.error('Error creating investment listing:', error);
-      toast.error('Failed to create listing');
+      console.error('Error creating investor profile:', error);
+      toast.error('Failed to create investor profile');
     } finally {
       setIsSubmitting(false);
     }
@@ -257,85 +236,155 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
           <BackToDashboard hasUnsavedChanges={hasUnsavedChanges} className="mb-4" />
           <CardTitle className="flex items-center gap-2 text-2xl">
             <TrendingUp className="w-6 h-6 text-orange-600" />
-            {formData.listingType === 'seeking-investment' ? 'Seek Investment' : 'Offer Investment'}
+            Create Investor Profile
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Listing Type */}
-            <div>
-              <Label>Listing Type *</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                <div>
-                  <Label className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      name="listingType"
-                      value="seeking-investment"
-                      checked={formData.listingType === 'seeking-investment'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, listingType: e.target.value as 'seeking-investment' }))}
-                    />
-                    <span>Seeking Investment</span>
-                  </Label>
-                  <p className="text-sm text-gray-500 ml-6">Looking for investors for my project</p>
-                </div>
-                <div>
-                  <Label className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      name="listingType"
-                      value="offering-investment"
-                      checked={formData.listingType === 'offering-investment'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, listingType: e.target.value as 'offering-investment' }))}
-                    />
-                    <span>Offering Investment</span>
-                  </Label>
-                  <p className="text-sm text-gray-500 ml-6">I'm an investor looking for opportunities</p>
-                </div>
-              </div>
-            </div>
-
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
-                <Label htmlFor="title">
-                  {formData.listingType === 'seeking-investment' ? 'Project/Company Name' : 'Investment Opportunity Title'} *
-                </Label>
+                <Label htmlFor="company_name">Company/Firm Name *</Label>
                 <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder={formData.listingType === 'seeking-investment' ? 
-                    "e.g., Revolutionary Art Platform Startup" : 
-                    "e.g., Seeking Art Tech Startups for Investment"
-                  }
+                  id="company_name"
+                  value={formData.company_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, company_name: e.target.value }))}
+                  placeholder="e.g., Acme Ventures, Creative Capital"
                   required
                 />
               </div>
 
               <div>
-                <Label htmlFor="projectType">
-                  {formData.listingType === 'seeking-investment' ? 'Project Type' : 'Investment Focus'} *
-                </Label>
-                <Select value={formData.projectType} onValueChange={(value) => setFormData(prev => ({ ...prev, projectType: value }))}>
+                <Label htmlFor="contact_email">Contact Email *</Label>
+                <Input
+                  id="contact_email"
+                  type="email"
+                  value={formData.contact_email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, contact_email: e.target.value }))}
+                  placeholder="contact@company.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="+1-555-0123"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  value={formData.website}
+                  onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://company.com"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  placeholder="San Francisco, CA or Remote"
+                />
+              </div>
+            </div>
+
+            {/* Bio and Investment Focus */}
+            <div>
+              <Label htmlFor="bio">Bio/About *</Label>
+              <Textarea
+                id="bio"
+                value={formData.bio}
+                onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
+                placeholder="Tell us about your investment firm, experience, and approach..."
+                rows={4}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="investment_focus">Investment Focus *</Label>
+              <Textarea
+                id="investment_focus"
+                value={formData.investment_focus}
+                onChange={(e) => setFormData(prev => ({ ...prev, investment_focus: e.target.value }))}
+                placeholder="Describe your investment focus, thesis, and what you look for in investments..."
+                rows={3}
+                required
+              />
+            </div>
+
+            {/* Investment Types */}
+            <div>
+              <Label>Investment Types</Label>
+              <div className="flex gap-2 mb-2">
+                <Select onValueChange={(value) => addToArray('investment_types', value, () => {})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder="Add investment type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {projectTypes.map(type => (
+                    {investmentTypes.map(type => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.investment_types.map(type => (
+                  <Badge key={type} variant="secondary" className="flex items-center gap-1">
+                    {type}
+                    <X 
+                      className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                      onClick={() => removeFromArray('investment_types', type)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+            </div>
 
-              <div>
-                <Label htmlFor="stage">
-                  {formData.listingType === 'seeking-investment' ? 'Current Stage' : 'Preferred Stage'}
-                </Label>
-                <Select value={formData.stage} onValueChange={(value) => setFormData(prev => ({ ...prev, stage: value }))}>
+            {/* Investment Focus Areas */}
+            <div>
+              <Label>Investment Focus Areas</Label>
+              <div className="flex gap-2 mb-2">
+                <Select onValueChange={(value) => addToArray('investment_focus_areas', value, () => {})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select stage" />
+                    <SelectValue placeholder="Add focus area" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {focusAreas.map(area => (
+                      <SelectItem key={area} value={area}>{area}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.investment_focus_areas.map(area => (
+                  <Badge key={area} variant="secondary" className="flex items-center gap-1">
+                    {area}
+                    <X 
+                      className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                      onClick={() => removeFromArray('investment_focus_areas', area)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Preferred Stages */}
+            <div>
+              <Label>Preferred Investment Stages</Label>
+              <div className="flex gap-2 mb-2">
+                <Select onValueChange={(value) => addToArray('preferred_stages', value, () => {})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Add stage" />
                   </SelectTrigger>
                   <SelectContent>
                     {stages.map(stage => (
@@ -344,375 +393,217 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <Label htmlFor="description">
-                {formData.listingType === 'seeking-investment' ? 'Project Description' : 'Investment Criteria'} *
-              </Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder={formData.listingType === 'seeking-investment' ? 
-                  "Describe your project, vision, market opportunity..." :
-                  "Describe what types of projects you're looking to invest in..."
-                }
-                rows={4}
-                required
-              />
-            </div>
-
-            {/* Financial Information */}
-            <div className="space-y-4">
-              <Label>Financial Details</Label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="fundingGoal">
-                    {formData.listingType === 'seeking-investment' ? 'Funding Goal' : 'Investment Budget'}
-                  </Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="fundingGoal"
-                      type="number"
-                      step="0.01"
-                      value={formData.fundingGoal}
-                      onChange={(e) => setFormData(prev => ({ ...prev, fundingGoal: e.target.value }))}
-                      placeholder="100000"
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="minimumInvestment">Minimum Investment</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="minimumInvestment"
-                      type="number"
-                      step="0.01"
-                      value={formData.minimumInvestment}
-                      onChange={(e) => setFormData(prev => ({ ...prev, minimumInvestment: e.target.value }))}
-                      placeholder="5000"
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="maximumInvestment">Maximum Investment</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="maximumInvestment"
-                      type="number"
-                      step="0.01"
-                      value={formData.maximumInvestment}
-                      onChange={(e) => setFormData(prev => ({ ...prev, maximumInvestment: e.target.value }))}
-                      placeholder="50000"
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="investmentType">Investment Type</Label>
-                  <Select value={formData.investmentType} onValueChange={(value) => setFormData(prev => ({ ...prev, investmentType: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select investment type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {investmentTypes.map(type => (
-                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="riskLevel">Risk Level</Label>
-                  <Select value={formData.riskLevel} onValueChange={(value) => setFormData(prev => ({ ...prev, riskLevel: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select risk level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {riskLevels.map(risk => (
-                        <SelectItem key={risk} value={risk}>{risk}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {formData.listingType === 'seeking-investment' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="equityOffered">Equity Offered (%)</Label>
-                    <Input
-                      id="equityOffered"
-                      type="number"
-                      step="0.1"
-                      value={formData.equityOffered}
-                      onChange={(e) => setFormData(prev => ({ ...prev, equityOffered: e.target.value }))}
-                      placeholder="10"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="expectedReturn">Expected Return (%)</Label>
-                    <Input
-                      id="expectedReturn"
-                      type="number"
-                      step="0.1"
-                      value={formData.expectedReturn}
-                      onChange={(e) => setFormData(prev => ({ ...prev, expectedReturn: e.target.value }))}
-                      placeholder="20"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Timeline */}
-            <div>
-              <Label htmlFor="timeline">
-                {formData.listingType === 'seeking-investment' ? 'Project Timeline' : 'Investment Timeline'}
-              </Label>
-              <Select value={formData.timeline} onValueChange={(value) => setFormData(prev => ({ ...prev, timeline: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select timeline" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timelineOptions.map(timeline => (
-                    <SelectItem key={timeline} value={timeline}>{timeline}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Industries */}
-            <div>
-              <Label>Industries/Sectors</Label>
-              <div className="flex gap-2 mb-2">
-                <Input
-                  value={newIndustry}
-                  onChange={(e) => setNewIndustry(e.target.value)}
-                  placeholder="Add industry"
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addToArray('industry', newIndustry, setNewIndustry))}
-                />
-                <Button type="button" onClick={() => addToArray('industry', newIndustry, setNewIndustry)} size="sm">
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
               <div className="flex flex-wrap gap-2">
-                {formData.industry.map(industry => (
-                  <Badge key={industry} variant="secondary" className="flex items-center gap-1">
-                    {industry}
+                {formData.preferred_stages.map(stage => (
+                  <Badge key={stage} variant="secondary" className="flex items-center gap-1">
+                    {stage}
                     <X 
                       className="w-3 h-3 cursor-pointer hover:text-red-500" 
-                      onClick={() => removeFromArray('industry', industry)}
+                      onClick={() => removeFromArray('preferred_stages', stage)}
                     />
                   </Badge>
                 ))}
               </div>
             </div>
 
-            {formData.listingType === 'seeking-investment' && (
-              <>
-                {/* Use of Funds */}
-                <div>
-                  <Label>Use of Funds</Label>
-                  <div className="flex gap-2 mb-2">
-                    <Input
-                      value={newUseOfFunds}
-                      onChange={(e) => setNewUseOfFunds(e.target.value)}
-                      placeholder="e.g., Product Development, Marketing, Team Expansion"
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addToArray('useOfFunds', newUseOfFunds, setNewUseOfFunds))}
-                    />
-                    <Button type="button" onClick={() => addToArray('useOfFunds', newUseOfFunds, setNewUseOfFunds)} size="sm">
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.useOfFunds.map(use => (
-                      <Badge key={use} variant="secondary" className="flex items-center gap-1">
-                        {use}
-                        <X 
-                          className="w-3 h-3 cursor-pointer hover:text-red-500" 
-                          onClick={() => removeFromArray('useOfFunds', use)}
-                        />
-                      </Badge>
-                    ))}
-                  </div>
+            {/* Investment Amounts */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="investment_range_min">Minimum Investment Range</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="investment_range_min"
+                    type="number"
+                    step="0.01"
+                    value={formData.investment_range_min}
+                    onChange={(e) => setFormData(prev => ({ ...prev, investment_range_min: e.target.value }))}
+                    placeholder="25000"
+                    className="pl-10"
+                  />
                 </div>
+              </div>
 
-                {/* Additional Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="targetMarket">Target Market</Label>
-                    <Input
-                      id="targetMarket"
-                      value={formData.targetMarket}
-                      onChange={(e) => setFormData(prev => ({ ...prev, targetMarket: e.target.value }))}
-                      placeholder="Who are your customers?"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="businessModel">Business Model</Label>
-                    <Input
-                      id="businessModel"
-                      value={formData.businessModel}
-                      onChange={(e) => setFormData(prev => ({ ...prev, businessModel: e.target.value }))}
-                      placeholder="How do you make money?"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="traction">Current Traction</Label>
-                    <Input
-                      id="traction"
-                      value={formData.traction}
-                      onChange={(e) => setFormData(prev => ({ ...prev, traction: e.target.value }))}
-                      placeholder="Revenue, users, partnerships, etc."
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="teamSize">Team Size</Label>
-                    <div className="relative">
-                      <Users className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="teamSize"
-                        value={formData.teamSize}
-                        onChange={(e) => setFormData(prev => ({ ...prev, teamSize: e.target.value }))}
-                        placeholder="5 people"
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
+              <div>
+                <Label htmlFor="investment_range_max">Maximum Investment Range</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="investment_range_max"
+                    type="number"
+                    step="0.01"
+                    value={formData.investment_range_max}
+                    onChange={(e) => setFormData(prev => ({ ...prev, investment_range_max: e.target.value }))}
+                    placeholder="500000"
+                    className="pl-10"
+                  />
                 </div>
-              </>
-            )}
+              </div>
 
-            {/* Location */}
+              <div>
+                <Label htmlFor="years_experience">Years of Experience</Label>
+                <Input
+                  id="years_experience"
+                  type="number"
+                  value={formData.years_experience}
+                  onChange={(e) => setFormData(prev => ({ ...prev, years_experience: e.target.value }))}
+                  placeholder="10"
+                />
+              </div>
+            </div>
+
+            {/* Portfolio Companies */}
             <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                placeholder="City, Country or Remote"
+              <Label>Portfolio Companies</Label>
+              <div className="flex gap-2 mb-2">
+                <Input
+                  value={newIndustry}
+                  onChange={(e) => setNewIndustry(e.target.value)}
+                  placeholder="Add portfolio company"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addToArray('portfolio_companies', newIndustry, setNewIndustry))}
+                />
+                <Button type="button" onClick={() => addToArray('portfolio_companies', newIndustry, setNewIndustry)} size="sm">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.portfolio_companies.map(company => (
+                  <Badge key={company} variant="secondary" className="flex items-center gap-1">
+                    {company}
+                    <X 
+                      className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                      onClick={() => removeFromArray('portfolio_companies', company)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Certifications */}
+            <div>
+              <Label>Certifications</Label>
+              <div className="flex gap-2 mb-2">
+                <Input
+                  value={newUseOfFunds}
+                  onChange={(e) => setNewUseOfFunds(e.target.value)}
+                  placeholder="Add certification (e.g., CFA, Series 7)"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addToArray('certifications', newUseOfFunds, setNewUseOfFunds))}
+                />
+                <Button type="button" onClick={() => addToArray('certifications', newUseOfFunds, setNewUseOfFunds)} size="sm">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.certifications.map(cert => (
+                  <Badge key={cert} variant="secondary" className="flex items-center gap-1">
+                    {cert}
+                    <X 
+                      className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                      onClick={() => removeFromArray('certifications', cert)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Languages */}
+            <div>
+              <Label>Languages</Label>
+              <div className="flex gap-2 mb-2">
+                <Select onValueChange={(value) => addToArray('languages', value, () => {})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Add language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {languages.map(lang => (
+                      <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.languages.map(lang => (
+                  <Badge key={lang} variant="secondary" className="flex items-center gap-1">
+                    {lang}
+                    <X 
+                      className="w-3 h-3 cursor-pointer hover:text-red-500" 
+                      onClick={() => removeFromArray('languages', lang)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Investment Terms */}
+            <div>
+              <Label htmlFor="investment_terms">Investment Terms</Label>
+              <Textarea
+                id="investment_terms"
+                value={formData.investment_terms}
+                onChange={(e) => setFormData(prev => ({ ...prev, investment_terms: e.target.value }))}
+                placeholder="Describe your typical investment terms, conditions, and requirements..."
+                rows={3}
               />
             </div>
 
-            {/* Options */}
-            <div className="space-y-4">
-              <Label>Additional Options</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="isPublic"
-                    checked={formData.isPublic}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isPublic: !!checked }))}
-                  />
-                  <Label htmlFor="isPublic">Public listing</Label>
-                </div>
+            {/* Social Media Links */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="linkedin_url">LinkedIn URL</Label>
+                <Input
+                  id="linkedin_url"
+                  value={formData.linkedin_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, linkedin_url: e.target.value }))}
+                  placeholder="https://linkedin.com/company/company-name"
+                />
+              </div>
 
-                {formData.listingType === 'seeking-investment' && (
-                  <>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="allowsPartialFunding"
-                        checked={formData.allowsPartialFunding}
-                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allowsPartialFunding: !!checked }))}
-                      />
-                      <Label htmlFor="allowsPartialFunding">Accept partial funding</Label>
-                    </div>
+              <div>
+                <Label htmlFor="twitter_url">Twitter URL</Label>
+                <Input
+                  id="twitter_url"
+                  value={formData.twitter_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, twitter_url: e.target.value }))}
+                  placeholder="https://twitter.com/companyhandle"
+                />
+              </div>
 
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="hasExitStrategy"
-                        checked={formData.hasExitStrategy}
-                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, hasExitStrategy: !!checked }))}
-                      />
-                      <Label htmlFor="hasExitStrategy">Have exit strategy</Label>
-                    </div>
-                  </>
-                )}
+              <div>
+                <Label htmlFor="instagram_url">Instagram URL</Label>
+                <Input
+                  id="instagram_url"
+                  value={formData.instagram_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, instagram_url: e.target.value }))}
+                  placeholder="https://instagram.com/companyhandle"
+                />
+              </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="requiresAccreditation"
-                    checked={formData.requiresAccreditation}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, requiresAccreditation: !!checked }))}
-                  />
-                  <Label htmlFor="requiresAccreditation">Requires accredited investors</Label>
-                </div>
+              <div>
+                <Label htmlFor="website_url">Website URL</Label>
+                <Input
+                  id="website_url"
+                  value={formData.website_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
+                  placeholder="https://company.com"
+                />
               </div>
             </div>
 
-            {/* File Uploads */}
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="pitchDeck">Pitch Deck / Presentation</Label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <Label htmlFor="pitchDeck" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-500">Upload pitch deck</span>
-                    <span className="text-gray-500"> or drag and drop</span>
-                  </Label>
-                  <Input
-                    id="pitchDeck"
-                    type="file"
-                    multiple
-                    accept=".pdf,.ppt,.pptx"
-                    onChange={(e) => handleFileChange('pitchDeck', e.target.files)}
-                    className="hidden"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">PDF, PPT files up to 25MB</p>
-                  {formData.pitchDeck.length > 0 && (
-                    <p className="text-sm text-green-600 mt-2">
-                      {formData.pitchDeck.length} file(s) selected
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="documents">Additional Documents</Label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <Plus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <Label htmlFor="documents" className="cursor-pointer">
-                    <span className="text-blue-600 hover:text-blue-500">Upload documents</span>
-                    <span className="text-gray-500"> or drag and drop</span>
-                  </Label>
-                  <Input
-                    id="documents"
-                    type="file"
-                    multiple
-                    onChange={(e) => handleFileChange('documents', e.target.files)}
-                    className="hidden"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Any file type up to 25MB each</p>
-                  {formData.documents.length > 0 && (
-                    <p className="text-sm text-green-600 mt-2">
-                      {formData.documents.length} document(s) selected
-                    </p>
-                  )}
-                </div>
-              </div>
+            {/* Portfolio URL */}
+            <div>
+              <Label htmlFor="portfolio_url">Portfolio URL</Label>
+              <Input
+                id="portfolio_url"
+                value={formData.portfolio_url}
+                onChange={(e) => setFormData(prev => ({ ...prev, portfolio_url: e.target.value }))}
+                placeholder="https://company.com/portfolio"
+              />
             </div>
 
             {/* Submit */}
             <div className="flex gap-4 pt-6">
               <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting ? 'Creating Listing...' : 'Create Investment Listing'}
+                {isSubmitting ? 'Creating Profile...' : 'Create Investor Profile'}
               </Button>
               {onClose && (
                 <Button type="button" variant="outline" onClick={onClose}>

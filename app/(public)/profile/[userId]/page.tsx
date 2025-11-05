@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Settings, Share, Heart, Eye, Grid, User, MapPin, Star, Camera, Mic, Palette, Building, DollarSign, Calendar, Briefcase, Plus, Check, Edit3, ExternalLink } from 'lucide-react';
+import { Settings, Share, Heart, Eye, Grid, User, MapPin, Star, Camera, Mic, Palette, Building, DollarSign, Calendar, Briefcase, Plus, Check, Edit3, ExternalLink, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
 import { ArtistProfilePage } from '@/components/pages/ArtistProfilePage';
 
 interface ServiceModule {
@@ -38,6 +37,10 @@ export default function ProfilePage() {
   const [profileData, setProfileData] = useState<any>(null);
   const [listings, setListings] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [talents, setTalents] = useState<any[]>([]);
+  const [reviewStats, setReviewStats] = useState<any>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // Helper function to safely access array length
   const safeArrayLength = (arr: any): number => {
@@ -69,100 +72,124 @@ export default function ProfilePage() {
       try {
         setLoading(true);
         console.log('Fetching profile for user ID:', targetUserId);
-        console.log('Is own profile:', isOwnProfile);
 
-        const baseUrl = `https://${projectId}.supabase.co/rest/v1`;
-        const headers = {
-          'apikey': publicAnonKey,
-          'Authorization': `Bearer ${publicAnonKey}`,
+        const apiBaseUrl = 'http://localhost:5001/api';
+        const headers: HeadersInit = {
           'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
         };
 
-        // Fetch user profile data
-        const userResponse = await fetch(`${baseUrl}/user_info?select=*&id=eq.${targetUserId}`, {
-          headers
-        });
-        
-        if (!userResponse.ok) {
-          throw new Error(`Failed to fetch user data: ${userResponse.statusText}`);
+        // Add auth token if user is logged in
+        const token = localStorage.getItem('token');
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
         }
-        
-        const userData = await userResponse.json();
-        console.log('User data fetched:', userData);
 
-        // Initialize with found user or create default for own profile
-        let foundUserInfo = userData.length > 0 ? userData[0] : null;
-        
-        // If this is our own profile and no data exists, create default data
-        if (!foundUserInfo) {
-          console.log('No user data found');
-          if (isOwnProfile && user && !foundUserInfo) {
-            foundUserInfo = {
-              id: user.id,
-              display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              bio: 'Welcome to my profile!',
-              location: '',
-              website: '',
-              avatar_url: user.user_metadata?.avatar_url || '',
-              email: user.email || '',
-              phone: '',
-              social_links: {},
-              skills: [],
-              portfolio_items: [],
-              reviews_received: [],
-              services_offered: []
-            };
-            console.log('Created default profile for own user:', foundUserInfo);
+        // Fetch user data
+        const userResponse = await fetch(`${apiBaseUrl}/users/${targetUserId}`, { headers });
+        let userData = null;
+        if (userResponse.ok) {
+          userData = await userResponse.json();
+        }
+
+        // Fetch user profile data (if exists)
+        let profileInfo = null;
+        if (user && token) {
+          try {
+            const profileResponse = await fetch(`${apiBaseUrl}/user-profiles/user/${targetUserId}`, { headers });
+            if (profileResponse.ok) {
+              profileInfo = await profileResponse.json();
+            }
+          } catch (e) {
+            console.log('Profile not found, using user data');
           }
         }
 
-        // Fetch listings data (assets, talent, etc.)
-        const listingsResponse = await fetch(`${baseUrl}/listings?select=*&user_id=eq.${targetUserId}`, {
-          headers
-        });
-        
-        let listingsData = [];
-        if (listingsResponse.ok) {
-          listingsData = await listingsResponse.json();
-          console.log('Listings data fetched:', listingsData);
+        // Combine user and profile data
+        const combinedData = {
+          id: userData?.id || targetUserId,
+          display_name: userData?.display_name || userData?.username || 'User',
+          bio: profileInfo?.bio || userData?.bio || '',
+          location: profileInfo?.location || '',
+          website: profileInfo?.website || '',
+          avatar_url: userData?.avatar_url || '',
+          email: isOwnProfile ? (userData?.email || '') : '',
+          phone: profileInfo?.phone || '',
+          skills: profileInfo?.skills || [],
+          portfolio_items: [],
+          ...userData,
+          ...profileInfo
+        };
+
+        // Fetch assets
+        const assetsResponse = await fetch(`${apiBaseUrl}/assets/user/${targetUserId}`, { headers });
+        let assetsData = [];
+        if (assetsResponse.ok) {
+          assetsData = await assetsResponse.json();
+          combinedData.portfolio_items = assetsData.map((asset: any) => ({
+            id: asset.id,
+            title: asset.name,
+            description: asset.description,
+            image_url: asset.url || asset.thumbnail_url,
+            created_at: asset.created_at
+          }));
+        }
+
+        // Fetch talent listings (all talents, will filter by user_id in the response)
+        const talentsResponse = await fetch(`${apiBaseUrl}/talents/search`, { headers });
+        let talentsData = [];
+        if (talentsResponse.ok) {
+          const allTalents = await talentsResponse.json();
+          // Filter talents by user_id
+          talentsData = allTalents.filter((talent: any) => talent.user_id?.toString() === targetUserId?.toString());
         }
 
         // Fetch reviews
-        const reviewsResponse = await fetch(`${baseUrl}/reviews?select=*&target_user_id=eq.${targetUserId}&order=created_at.desc&limit=10`, {
-          headers
-        });
-        
+        const reviewsResponse = await fetch(`${apiBaseUrl}/user-reviews/user/${targetUserId}`, { headers });
         let reviewsData = [];
         if (reviewsResponse.ok) {
           reviewsData = await reviewsResponse.json();
-          console.log('Reviews data fetched:', reviewsData);
         }
 
-        setProfileData(foundUserInfo);
-        setListings(listingsData);
+        // Fetch review stats
+        const statsResponse = await fetch(`${apiBaseUrl}/user-reviews/user/${targetUserId}/stats`, { headers });
+        let statsData = null;
+        if (statsResponse.ok) {
+          statsData = await statsResponse.json();
+        }
+
+        // Check if current user is following this user
+        if (user && token && !isOwnProfile) {
+          try {
+            const followCheckResponse = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/check`, { headers });
+            if (followCheckResponse.ok) {
+              const followData = await followCheckResponse.json();
+              setIsFollowing(followData.is_following || false);
+            }
+          } catch (e) {
+            console.log('Could not check follow status');
+          }
+        }
+
+        setProfileData(combinedData);
+        setAssets(assetsData);
+        setTalents(talentsData);
         setReviews(reviewsData);
+        setReviewStats(statsData);
         
       } catch (error) {
         console.error('Error fetching profile data:', error);
-        // Set some default data for demo purposes
         setProfileData({
           id: targetUserId,
-          display_name: isOwnProfile ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User') : 'User Profile',
-          bio: 'Welcome to this profile!',
+          display_name: 'User Profile',
+          bio: '',
           location: '',
           website: '',
-          avatar_url: isOwnProfile ? (user?.user_metadata?.avatar_url || '') : '',
-          email: isOwnProfile ? (user?.email || '') : '',
+          avatar_url: '',
+          email: '',
           phone: '',
-          social_links: {},
           skills: [],
           portfolio_items: [],
-          reviews_received: [],
-          services_offered: []
         });
-        setListings([]);
-        setReviews([]);
       } finally {
         setLoading(false);
       }
@@ -173,60 +200,136 @@ export default function ProfilePage() {
     }
   }, [targetUserId, isOwnProfile, user?.id]);
 
-  const handleSaveProfile = async (updatedData: any) => {
+  // Button handlers
+  const handleShare = async () => {
+    const profileUrl = `${window.location.origin}/profile/${targetUserId}`;
     try {
-      console.log('Saving profile data:', updatedData);
-      
-      const baseUrl = `https://${projectId}.supabase.co/rest/v1`;
+      await navigator.clipboard.writeText(profileUrl);
+      alert('Profile link copied to clipboard!');
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = profileUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Profile link copied to clipboard!');
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!user) {
+      window.location.href = `/auth?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+
+    if (isOwnProfile) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = `/auth?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+
+    try {
+      const apiBaseUrl = 'http://localhost:5001/api';
       const headers = {
-        'apikey': publicAnonKey,
-        'Authorization': `Bearer ${publicAnonKey}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
+        'Authorization': `Bearer ${token}`,
       };
 
-      // Try to update existing record first
-      const updateResponse = await fetch(`${baseUrl}/user_info?id=eq.${user?.id}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(updatedData)
-      });
-
-      if (updateResponse.ok) {
-        const updatedRecord = await updateResponse.json();
-        if (updatedRecord.length > 0) {
-          setProfileData(updatedRecord[0]);
-          setShowEditDialog(false);
-          return;
-        }
-      }
-
-      // If update didn't work, try to insert new record
-      const insertResponse = await fetch(`${baseUrl}/user_info`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...updatedData, id: user?.id })
-      });
-
-      if (insertResponse.ok) {
-        const newRecord = await insertResponse.json();
-        if (newRecord.length > 0) {
-          setProfileData(newRecord[0]);
-        } else {
-          // Just update local state if database operations fail
-          setProfileData({ ...profileData, ...updatedData });
+      if (isFollowing) {
+        // Unfollow
+        const response = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/follow`, {
+          method: 'DELETE',
+          headers,
+        });
+        if (response.ok) {
+          setIsFollowing(false);
+          alert('Unfollowed successfully');
         }
       } else {
-        // Fallback to local state update
-        setProfileData({ ...profileData, ...updatedData });
+        // Follow
+        const response = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/follow`, {
+          method: 'POST',
+          headers,
+        });
+        if (response.ok) {
+          setIsFollowing(true);
+          alert('Followed successfully');
+        }
       }
-      
-      setShowEditDialog(false);
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+      alert('Failed to connect. Please try again.');
+    }
+  };
+
+  const handleContactEmail = () => {
+    if (profileData?.email) {
+      window.location.href = `mailto:${profileData.email}`;
+    } else {
+      alert('Email not available');
+    }
+  };
+
+  const handleContactPhone = () => {
+    if (profileData?.phone) {
+      window.location.href = `tel:${profileData.phone}`;
+    } else {
+      alert('Phone number not available');
+    }
+  };
+
+  const handleContactChat = () => {
+    if (!user) {
+      window.location.href = `/auth?redirect=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+    window.location.href = `/dashboard/chat?userId=${targetUserId}`;
+  };
+
+  const handleSaveProfile = async (updatedData: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token || !user) {
+        alert('Please log in to save your profile');
+        return;
+      }
+
+      const apiBaseUrl = 'http://localhost:5001/api';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+
+      // Update user profile
+      const response = await fetch(`${apiBaseUrl}/user-profiles/user/${user.id}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          bio: updatedData.bio,
+          location: updatedData.location,
+          website: updatedData.website,
+          phone: updatedData.phone,
+          skills: updatedData.skills,
+        }),
+      });
+
+      if (response.ok) {
+        const savedProfile = await response.json();
+        setProfileData({ ...profileData, ...savedProfile });
+        setShowEditDialog(false);
+        alert('Profile updated successfully!');
+      } else {
+        throw new Error('Failed to save profile');
+      }
     } catch (error) {
       console.error('Error saving profile:', error);
-      // Fallback to local state update
-      setProfileData({ ...profileData, ...updatedData });
-      setShowEditDialog(false);
+      alert('Failed to save profile. Please try again.');
     }
   };
 
@@ -295,7 +398,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={handleShare}>
                   <Share className="h-4 w-4 mr-2" />
                   Share
                 </Button>
@@ -319,9 +422,18 @@ export default function ProfilePage() {
                     </DialogContent>
                   </Dialog>
                 ) : (
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Connect
+                  <Button onClick={handleConnect}>
+                    {isFollowing ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Following
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Connect
+                      </>
+                    )}
                   </Button>
                 )}
               </div>
@@ -377,16 +489,35 @@ export default function ProfilePage() {
                   )}
                   
                   {/* Public contact options for non-own profiles */}
-                  {profileData.email && !isOwnProfile && (
-                    <Button variant="outline" className="w-full">
-                      Contact via Email
-                    </Button>
-                  )}
-                  
-                  {profileData.phone && !isOwnProfile && (
-                    <Button variant="outline" className="w-full">
-                      Contact via Phone
-                    </Button>
+                  {!isOwnProfile && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        className="w-full mb-2"
+                        onClick={handleContactChat}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Send Message
+                      </Button>
+                      {profileData?.email && (
+                        <Button 
+                          variant="outline" 
+                          className="w-full mb-2"
+                          onClick={handleContactEmail}
+                        >
+                          Contact via Email
+                        </Button>
+                      )}
+                      {profileData?.phone && (
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={handleContactPhone}
+                        >
+                          Contact via Phone
+                        </Button>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -472,7 +603,7 @@ export default function ProfilePage() {
                               Portfolio Items
                             </p>
                             <p className={`text-2xl font-bold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {safeArrayLength(profileData?.portfolio_items)}
+                              {safeArrayLength(profileData?.portfolio_items) || assets.length}
                             </p>
                           </div>
                         </div>
@@ -488,7 +619,7 @@ export default function ProfilePage() {
                               Average Rating
                             </p>
                             <p className={`text-2xl font-bold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              4.8
+                              {reviewStats?.average_rating ? reviewStats.average_rating.toFixed(1) : '0.0'}
                             </p>
                           </div>
                         </div>
@@ -610,27 +741,27 @@ export default function ProfilePage() {
                             <div className="flex items-start space-x-4">
                               <Avatar>
                                 <AvatarImage src={review.reviewer_avatar} />
-                                <AvatarFallback>{review.reviewer_name?.charAt(0) || 'U'}</AvatarFallback>
+                                <AvatarFallback>{(review.reviewer_name || review.reviewer_username || 'U')?.charAt(0).toUpperCase()}</AvatarFallback>
                               </Avatar>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
                                   <h4 className={`font-medium ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                    {review.reviewer_name || 'Anonymous'}
+                                    {review.reviewer_name || review.reviewer_username || 'Anonymous'}
                                   </h4>
                                   <div className="flex items-center">
                                     {[...Array(5)].map((_, i) => (
                                       <Star 
                                         key={i} 
-                                        className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-current' : isDashboardDarkMode ? 'text-gray-600' : 'text-gray-300'}`} 
+                                        className={`h-4 w-4 ${i < (review.rating || 0) ? 'text-yellow-400 fill-current' : isDashboardDarkMode ? 'text-gray-600' : 'text-gray-300'}`} 
                                       />
                                     ))}
                                   </div>
                                 </div>
                                 <p className={`mt-2 ${isDashboardDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  {review.comment}
+                                  {review.review_text || review.comment || 'No comment'}
                                 </p>
                                 <p className={`mt-2 text-sm ${isDashboardDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                                  {new Date(review.created_at).toLocaleDateString()}
+                                  {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
                                 </p>
                               </div>
                             </div>

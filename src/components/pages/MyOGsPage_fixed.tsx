@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Search, 
   Filter, 
@@ -39,6 +39,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { toast } from 'sonner';
 
 interface MyOGsPageProps {
   isDashboardDarkMode: boolean;
@@ -67,125 +69,17 @@ interface OriginalRelease {
   links?: { platform: string; url: string }[];
 }
 
-const mockReleases: OriginalRelease[] = [
-  {
-    id: "1",
-    title: "Metamorphosis Series",
-    type: "collection",
-    description: "A groundbreaking collection of 12 digital artworks exploring themes of transformation, identity, and the intersection of technology with human emotion. Each piece represents a different stage of creative evolution.",
-    coverImage: "https://images.unsplash.com/photo-1492037766660-2a56f9eb3fcb?w=500&h=500&fit=crop",
-    releaseDate: "2024-11-01",
-    status: "published",
-    pieceCount: 12,
-    category: "Digital Art",
-    tags: ["transformation", "digital", "contemporary", "emotions"],
-    views: 8420,
-    likes: 342,
-    downloads: 89,
-    shares: 156,
-    isPublic: true,
-    isFeatured: true,
-    priceRange: "$250 - $800",
-    collaborators: ["Artist Name", "Digital Studio"],
-    venues: ["Virtual Gallery", "Online Platform"],
-    links: [
-      { platform: "Instagram", url: "#" },
-      { platform: "Portfolio", url: "#" }
-    ]
-  },
-  {
-    id: "2",
-    title: "Urban Chronicles",
-    type: "book",
-    description: "A visual journey through metropolitan landscapes, capturing the essence of urban life through photography and narrative storytelling.",
-    coverImage: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=500&h=500&fit=crop",
-    releaseDate: "2024-09-15",
-    status: "published",
-    category: "Photography Book",
-    tags: ["urban", "photography", "storytelling", "city"],
-    views: 5240,
-    likes: 189,
-    downloads: 42,
-    shares: 73,
-    isPublic: true,
-    isFeatured: false,
-    priceRange: "$45 - $65",
-    venues: ["Local Bookstores", "Online"],
-    links: [
-      { platform: "Amazon", url: "#" },
-      { platform: "Website", url: "#" }
-    ]
-  },
-  {
-    id: "3",
-    title: "Echoes Exhibition",
-    type: "exhibition",
-    description: "An immersive multimedia exhibition exploring sound, space, and memory through interactive installations.",
-    coverImage: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=500&fit=crop",
-    releaseDate: "2024-12-01",
-    status: "upcoming",
-    category: "Mixed Media",
-    tags: ["installation", "multimedia", "interactive", "sound"],
-    views: 1240,
-    likes: 67,
-    downloads: 12,
-    shares: 28,
-    isPublic: true,
-    isFeatured: true,
-    venues: ["Modern Art Museum", "Gallery District"],
-    links: [
-      { platform: "Museum Site", url: "#" },
-      { platform: "Event Page", url: "#" }
-    ]
-  },
-  {
-    id: "4",
-    title: "Midnight Melodies",
-    type: "album",
-    description: "A collection of ambient electronic compositions inspired by late-night city soundscapes and urban solitude.",
-    coverImage: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&h=500&fit=crop",
-    releaseDate: "2024-08-20",
-    status: "published",
-    category: "Electronic Music",
-    tags: ["ambient", "electronic", "atmospheric", "nocturnal"],
-    views: 3680,
-    likes: 156,
-    downloads: 234,
-    shares: 89,
-    isPublic: true,
-    isFeatured: false,
-    priceRange: "$15 - $25",
-    links: [
-      { platform: "Spotify", url: "#" },
-      { platform: "Bandcamp", url: "#" }
-    ]
-  },
-  {
-    id: "5",
-    title: "Draft Project Alpha",
-    type: "series",
-    description: "Work in progress - A conceptual series exploring the relationship between technology and nature.",
-    coverImage: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=500&h=500&fit=crop",
-    releaseDate: "2024-12-15",
-    status: "draft",
-    category: "Conceptual Art",
-    tags: ["technology", "nature", "concept", "experimental"],
-    views: 120,
-    likes: 8,
-    downloads: 0,
-    shares: 2,
-    isPublic: false,
-    isFeatured: false
-  }
-];
-
 export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [releases, setReleases] = useState<OriginalRelease[]>([]);
+  const [creating, setCreating] = useState(false);
   const [newRelease, setNewRelease] = useState({
     title: "",
     type: "collection" as const,
@@ -196,7 +90,116 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
     isFeatured: false
   });
 
-  const filteredReleases = mockReleases.filter(release => {
+  // Fetch original releases from API
+  useEffect(() => {
+    const fetchReleases = async () => {
+      // Always clear releases first to prevent stale data
+      setReleases([]);
+      
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('access_token');
+        
+        let userId = user.id;
+        if (!userId && typeof window !== 'undefined') {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              userId = parsedUser?.id;
+            } catch (e) {
+              console.error('Error parsing stored user:', e);
+            }
+          }
+        }
+
+        if (!userId) {
+          setLoading(false);
+          return;
+        }
+
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(
+          `http://localhost:5001/api/original-releases/user/${userId}`,
+          { 
+            headers,
+            cache: 'no-store' // Prevent caching
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Fetched releases from API:', data); // Debug log
+          
+          // Handle case where API returns empty array
+          if (!Array.isArray(data)) {
+            console.error('API response is not an array:', data);
+            setReleases([]);
+            setLoading(false);
+            return;
+          }
+          
+          // Transform API data to match frontend interface
+          const transformedReleases: OriginalRelease[] = data.map((release: any) => ({
+            id: release.id.toString(),
+            title: release.title,
+            type: release.type,
+            description: release.description || '',
+            coverImage: release.cover_image || '',
+            releaseDate: release.release_date || release.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            status: release.status,
+            pieceCount: release.piece_count,
+            category: release.category || '',
+            tags: Array.isArray(release.tags) ? release.tags : [],
+            views: release.views || 0,
+            likes: release.likes || 0,
+            downloads: release.downloads || 0,
+            shares: release.shares || 0,
+            isPublic: release.is_public || false,
+            isFeatured: release.is_featured || false,
+            priceRange: release.price_range || 
+              (release.price_min && release.price_max ? `$${release.price_min} - $${release.price_max}` : undefined),
+            collaborators: Array.isArray(release.collaborators) ? release.collaborators : [],
+            venues: Array.isArray(release.venues) ? release.venues : [],
+            links: typeof release.links === 'string' ? 
+              (release.links ? JSON.parse(release.links) : []) : 
+              (Array.isArray(release.links) ? release.links : [])
+          }));
+          
+          console.log('Transformed releases:', transformedReleases); // Debug log
+          setReleases(transformedReleases);
+        } else {
+          console.error('Failed to fetch releases, status:', response.status);
+          setReleases([]);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          toast.error('Failed to load releases');
+        }
+      } catch (error) {
+        console.error('Error fetching releases:', error);
+        setReleases([]);
+        toast.error('Failed to load releases');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReleases();
+  }, [user]);
+
+  const filteredReleases = releases.filter(release => {
     const matchesSearch = release.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          release.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = filterType === "all" || release.type === filterType;
@@ -257,19 +260,121 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
     });
   };
 
-  const handleCreateRelease = () => {
-    // Handle form submission - in real app would save to backend
-    console.log("Creating new release:", newRelease);
-    setShowCreateDialog(false);
-    setNewRelease({
-      title: "",
-      type: "collection",
-      description: "",
-      category: "",
-      tags: "",
-      isPublic: true,
-      isFeatured: false
-    });
+  const handleCreateRelease = async () => {
+    if (!user) {
+      toast.error('Please log in to create a release');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      const token = localStorage.getItem('access_token');
+      
+      let userId = user.id;
+      if (!userId && typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            userId = parsedUser?.id;
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
+          }
+        }
+      }
+
+      if (!userId) {
+        toast.error('Unable to identify user');
+        setCreating(false);
+        return;
+      }
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Parse tags from comma-separated string
+      const tagsArray = newRelease.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+
+      const response = await fetch(
+        'http://localhost:5001/api/original-releases',
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            user_id: userId,
+            title: newRelease.title,
+            type: newRelease.type,
+            description: newRelease.description,
+            category: newRelease.category,
+            tags: tagsArray,
+            is_public: newRelease.isPublic,
+            is_featured: newRelease.isFeatured,
+            status: 'draft'
+          })
+        }
+      );
+
+      if (response.ok) {
+        toast.success('Release created successfully!');
+        setShowCreateDialog(false);
+        setNewRelease({
+          title: "",
+          type: "collection",
+          description: "",
+          category: "",
+          tags: "",
+          isPublic: true,
+          isFeatured: false
+        });
+        // Refresh the list
+        const fetchResponse = await fetch(
+          `http://localhost:5001/api/original-releases/user/${userId}`,
+          { headers }
+        );
+        if (fetchResponse.ok) {
+          const data = await fetchResponse.json();
+          const transformedReleases: OriginalRelease[] = data.map((release: any) => ({
+            id: release.id.toString(),
+            title: release.title,
+            type: release.type,
+            description: release.description || '',
+            coverImage: release.cover_image || '',
+            releaseDate: release.release_date || release.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            status: release.status,
+            pieceCount: release.piece_count,
+            category: release.category || '',
+            tags: release.tags || [],
+            views: release.views || 0,
+            likes: release.likes || 0,
+            downloads: release.downloads || 0,
+            shares: release.shares || 0,
+            isPublic: release.is_public || false,
+            isFeatured: release.is_featured || false,
+            priceRange: release.price_range || undefined,
+            collaborators: release.collaborators || [],
+            venues: release.venues || [],
+            links: typeof release.links === 'string' ? JSON.parse(release.links || '[]') : (release.links || [])
+          }));
+          setReleases(transformedReleases);
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.error || 'Failed to create release');
+      }
+    } catch (error) {
+      console.error('Error creating release:', error);
+      toast.error('Failed to create release');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const ReleaseCard = ({ release }: { release: OriginalRelease }) => (
@@ -444,6 +549,17 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
     </Card>
   );
 
+  if (loading) {
+    return (
+      <div className={`p-6 flex items-center justify-center min-h-screen ${isDashboardDarkMode ? "bg-[#171717]" : "bg-gray-50"}`}>
+        <div className="text-center">
+          <div className={`animate-spin rounded-full h-32 w-32 border-b-2 mx-auto mb-4 ${isDashboardDarkMode ? "border-white" : "border-gray-900"}`}></div>
+          <p className={isDashboardDarkMode ? "text-white" : "text-gray-900"}>Loading releases...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -557,8 +673,8 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
                   <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleCreateRelease} className="bg-[#FF8D28] hover:bg-[#FF8D28]/90">
-                    Create Release
+                  <Button onClick={handleCreateRelease} className="bg-[#FF8D28] hover:bg-[#FF8D28]/90" disabled={creating}>
+                    {creating ? 'Creating...' : 'Create Release'}
                   </Button>
                 </div>
               </div>
@@ -576,7 +692,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
                 </div>
                 <div>
                   <p className={`text-2xl font-bold ${isDashboardDarkMode ? "text-white" : "text-gray-900"}`}>
-                    {mockReleases.length}
+                    {releases.length}
                   </p>
                   <p className={`text-sm ${isDashboardDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                     Total Releases
@@ -594,7 +710,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
                 </div>
                 <div>
                   <p className={`text-2xl font-bold ${isDashboardDarkMode ? "text-white" : "text-gray-900"}`}>
-                    {mockReleases.reduce((sum, release) => sum + release.views, 0).toLocaleString()}
+                    {releases.reduce((sum, release) => sum + release.views, 0).toLocaleString()}
                   </p>
                   <p className={`text-sm ${isDashboardDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                     Total Views
@@ -612,7 +728,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
                 </div>
                 <div>
                   <p className={`text-2xl font-bold ${isDashboardDarkMode ? "text-white" : "text-gray-900"}`}>
-                    {mockReleases.reduce((sum, release) => sum + release.likes, 0).toLocaleString()}
+                    {releases.reduce((sum, release) => sum + release.likes, 0).toLocaleString()}
                   </p>
                   <p className={`text-sm ${isDashboardDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                     Total Likes
@@ -630,7 +746,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
                 </div>
                 <div>
                   <p className={`text-2xl font-bold ${isDashboardDarkMode ? "text-white" : "text-gray-900"}`}>
-                    {mockReleases.reduce((sum, release) => sum + release.downloads, 0).toLocaleString()}
+                    {releases.reduce((sum, release) => sum + release.downloads, 0).toLocaleString()}
                   </p>
                   <p className={`text-sm ${isDashboardDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                     Total Downloads

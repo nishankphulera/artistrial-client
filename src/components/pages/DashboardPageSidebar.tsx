@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -19,7 +20,6 @@ import {
   CreditCard,
   Clock,
   Plus,
-  Users as CollabIcon,
   Settings,
   ShoppingCart,
   FileText,
@@ -74,15 +74,20 @@ import {
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { projectId, publicAnonKey } from "@/utils/supabase/info";
+import { useCart } from "@/hooks/useCart";
 
 // Import admin page components
 import { AssetMarketplaceAdmin } from "./admin/AssetMarketplaceAdmin";
+import { AssetMarketplacePage } from "./AssetMarketplacePage";
 import { TalentMarketplaceAdmin } from "./admin/TalentMarketplaceAdmin";
+import { TalentMarketplacePage } from "./TalentMarketplacePage";
+import { TicketsMarketplacePage } from "./TicketsMarketplacePage";
 import { StudiosAdmin } from "./admin/StudiosAdmin";
 import { InvestorsAdmin } from "./admin/InvestorsAdmin";
 import { TicketsAdmin } from "./admin/TicketsAdmin";
 import { LegalServicesAdmin } from "./admin/LegalServicesAdmin";
 import { ProductServicesAdmin } from "./admin/ProductServicesAdmin";
+import { ProductServicesPage } from "./ProductServicesPage";
 import { EducationAdmin } from "./admin/EducationAdmin";
 import { ProductAndServicesListingForm } from "@/components/forms/ProductAndServicesListingForm";
 import { AssetListingForm } from "@/components/forms/AssetListingForm";
@@ -201,20 +206,20 @@ const menuSections = [
   {
     title: "Marketplaces",
     items: [
-      { id: "talent-marketplace", label: "Talent Marketplace", icon: Briefcase, path: "/marketplace/talent" },
-      { id: "marketplace", label: "Asset Marketplace", icon: Palette, path: "/marketplace/assets" },
-      { id: "studios", label: "Studio Bookings", icon: Camera, path: "/marketplace/studios" },
-      { id: "investors", label: "Investor Connect", icon: TrendingUp, path: "/marketplace/investors" },
-      { id: "tickets", label: "Event Tickets", icon: Ticket, path: "/marketplace/tickets" },
-      { id: "legal-services", label: "Legal Services", icon: Gavel, path: "/marketplace/legal" },
-      { id: "product-services", label: "Products & Services", icon: ShoppingBag, path: "/marketplace/products" },
-      { id: "education", label: "Education & Learning", icon: GraduationCap, path: "/marketplace/education" },
+      { id: "talent-marketplace", label: "Talent Marketplace", icon: Briefcase, path: "/dashboard/marketplace/talent" },
+      { id: "marketplace", label: "Asset Marketplace", icon: Palette, path: "/dashboard/marketplace/assets" },
+      { id: "studios", label: "Studio Bookings", icon: Camera, path: "/dashboard/marketplace/studios" },
+      { id: "investors", label: "Investor Connect", icon: TrendingUp, path: "/dashboard/marketplace/investors" },
+      { id: "tickets", label: "Event Tickets", icon: Ticket, path: "/dashboard/marketplace/tickets" },
+      { id: "legal-services", label: "Legal Services", icon: Gavel, path: "/dashboard/marketplace/legal" },
+      { id: "product-services", label: "Products & Services", icon: ShoppingBag, path: "/dashboard/marketplace/products" },
+      { id: "education", label: "Education & Learning", icon: GraduationCap, path: "/dashboard/marketplace/education" },
     ],
   },
   {
     title: "Collaborations",
     items: [
-      { id: "collaborations", label: "My Projects", icon: CollabIcon, path: "/dashboard/collaborations" },
+      { id: "collaborations", label: "My Projects", icon: Users, path: "/dashboard/collaborations" },
       { id: "collaborations-browse", label: "Browse Collaborations", icon: BookOpen, path: "/dashboard/collaborations/browse" },
       { id: "collaborations-create", label: "Create Project", icon: Plus, path: "/dashboard/collaborations/create" },
       { id: "collaborations-applications", label: "Applications", icon: FileText, path: "/dashboard/collaborations/applications" },
@@ -393,6 +398,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
 }) => {
   const { user, signOut, setUser } = useAuth();
   const router = useRouter();
+  const { handleAddToCart: handleAddToCartHook, handleRemoveFromCart: handleRemoveFromCartHook } = useCart();
   const [stats, setStats] = useState<DashboardStats>({
     totalListings: 0,
     totalPurchases: 0,
@@ -408,6 +414,12 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [userData, setUserData] = useState<any>(null); // Store full user data from API
+  const [internalCartItemCount, setInternalCartItemCount] = useState(0);
+
+  // Use internal cart count state (fetched from API)
+  // The prop cartItemCount can be used to override, but we'll use internal state by default
+  const displayCartItemCount = internalCartItemCount;
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("dashboard-theme");
@@ -415,6 +427,98 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
     setIsDarkMode(shouldUseDark);
     updateTheme(shouldUseDark);
   }, []);
+
+  // Fetch cart count
+  useEffect(() => {
+    const fetchCartCount = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        const response = await fetch(
+          `http://localhost:5001/api/cart/${user.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const count = data.cart?.items?.length || 0;
+          setInternalCartItemCount(count);
+        }
+      } catch (error) {
+        console.error('Error fetching cart count:', error);
+      }
+    };
+
+    fetchCartCount();
+  }, [user?.id]);
+
+  // Handler for adding to cart
+  const handleAddToCart = async (assetId: string) => {
+    if (!user) {
+      alert('Please sign in to add items to cart');
+      return;
+    }
+
+    try {
+      await handleAddToCartHook(assetId, user);
+      // Update cart count after adding
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await fetch(
+          `http://localhost:5001/api/cart/${user.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const count = data.cart?.items?.length || 0;
+          setInternalCartItemCount(count);
+        }
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
+  // Handler for removing from cart
+  const handleRemoveFromCart = async (assetId: string) => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      await handleRemoveFromCartHook(assetId, user);
+      // Update cart count after removing
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await fetch(
+          `http://localhost:5001/api/cart/${user.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const count = data.cart?.items?.length || 0;
+          setInternalCartItemCount(count);
+        }
+      }
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+    }
+  };
 
   const updateTheme = (dark: boolean) => {
     localStorage.setItem("dashboard-theme", dark ? "dark" : "light");
@@ -427,30 +531,47 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
   };
 
   useEffect(() => {
-    // Check for OAuth redirect with email parameter
+    // Check for OAuth redirect with token and user parameters
     const urlParams = new URLSearchParams(window.location.search);
-    const email = urlParams.get('email');
+    const token = urlParams.get('token');
+    const userParam = urlParams.get('user');
     const success = urlParams.get('success');
 
-    if (success === 'true' && email && !user) {
-      // OAuth login successful - create user object and save to localStorage
-      const oauthUser = {
-        email: email,
-        user_metadata: {
-          full_name: email.split('@')[0], // Use email prefix as name
-          avatar_url: null
-        }
-      };
-      
-      localStorage.setItem('user', JSON.stringify(oauthUser));
-      setUser(oauthUser);
-      
-      // Clean up URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
+    console.log('OAuth parameters:', { token: !!token, userParam: !!userParam, success, user: !!user });
+
+    if (success === 'true' && token && userParam) {
+      try {
+        // Parse user data from URL parameter
+        const oauthUser = JSON.parse(decodeURIComponent(userParam));
+        
+        // Store JWT token and user data in localStorage
+        localStorage.setItem('access_token', token);
+        localStorage.setItem('user', JSON.stringify(oauthUser));
+        setUser(oauthUser);
+        
+        // Clean up URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        console.log('Google OAuth login successful:', oauthUser);
+        return; // Don't redirect to auth, let the user state update
+      } catch (error) {
+        console.error('Error parsing OAuth user data:', error);
+      }
     }
 
-    if (!user && !email) {
+    // Only redirect to auth if we don't have a user and we're not in the middle of OAuth processing
+    if (!user || !user?.email) {
+      // Check if we have stored user data in localStorage as fallback
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          return;
+        } catch (error) {
+          console.error('Error parsing stored user data:', error);
+        }
+      }
       router.push("/auth");
       return;
     }
@@ -471,7 +592,8 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
       isMounted = false;
       controller.abort();
     };
-  }, [user, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, router]); // Only depend on user.id, not the entire user object
 
   const fetchDashboardData = async () => {
     let controller: AbortController | null = null;
@@ -479,186 +601,297 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
 
     try {
       const token = localStorage.getItem("access_token");
-
-      // Always set mock data as fallback
-      const mockStats = {
-        totalListings: 8,
-        totalPurchases: 3,
-        totalRevenue: 1040,
-        pendingBookings: 2,
-        activeListings: 6,
-        totalViews: 1420,
-      };
-
-      if (!token) {
-        console.log("No access token found, using mock data");
-        setStats(mockStats);
-      } else {
-        try {
-          const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/dashboard/stats`;
-          console.log("Attempting to fetch dashboard data from:", apiUrl);
-
-          // Create timeout for fetch request
-          controller = new AbortController();
-          timeoutId = setTimeout(() => {
-            if (controller && !controller.signal.aborted) {
-              controller.abort();
-            }
-          }, 5000); // Reduced to 5 seconds
-
-          const response = await fetch(apiUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            signal: controller.signal,
-          });
-
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
+      
+      // Get user ID
+      let userId = user?.id;
+      if (!userId && typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            userId = parsedUser?.id;
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
           }
-
-          console.log("Dashboard API response status:", response.status);
-
-          if (response.ok) {
-            const data = await response.json();
-            console.log("Dashboard API data received:", data);
-            setStats({
-              totalListings: data.stats.totalArtworks || 0,
-              totalPurchases: data.stats.totalSales || 0,
-              totalRevenue: data.stats.totalRevenue || 0,
-              pendingBookings: Math.floor(Math.random() * 5),
-              activeListings: data.stats.itemsForSale || 0,
-              totalViews: data.stats.totalViews || 0,
-            });
-          } else {
-            console.warn(`Dashboard API returned status ${response.status}, using mock data`);
-            setStats(mockStats);
-          }
-        } catch (fetchError: any) {
-          // Clean up timeout if it exists
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-
-          // Only log non-abort errors
-          if (fetchError.name !== 'AbortError') {
-            console.warn("Dashboard API request failed, using mock data:", fetchError);
-          } else {
-            console.log("Dashboard API request timed out, using mock data");
-          }
-          setStats(mockStats);
         }
       }
 
-      const mockListings: MarketplaceListing[] = [
-        {
-          id: "1",
-          type: "talent",
-          title: "UI/UX Design Services",
-          price: 75,
-          status: "active",
-          views: 234,
-          inquiries: 8,
-          createdAt: "2024-01-15",
-          thumbnail: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=60&h=60&fit=crop",
-          category: "Design",
-          subcategory: "UI/UX Design",
-        },
-        {
-          id: "2",
-          type: "asset",
-          title: "Digital Art Collection",
-          price: 299,
-          status: "active",
-          views: 456,
-          inquiries: 12,
-          createdAt: "2024-01-10",
-          thumbnail: "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=60&h=60&fit=crop",
-          category: "Digital Art",
-          subcategory: "Abstract",
-        },
-        {
-          id: "3",
-          type: "studio",
-          title: "Photography Studio Rental",
-          price: 120,
-          status: "active",
-          views: 89,
-          inquiries: 5,
-          createdAt: "2024-01-08",
-          thumbnail: "https://images.unsplash.com/photo-1493932484895-752d1471eab5?w=60&h=60&fit=crop",
-          category: "Photography",
-          subcategory: "Portrait Studio",
-        },
-        {
-          id: "4",
-          type: "legal",
-          title: "Copyright Law Consultation",
-          price: 250,
-          status: "pending",
-          views: 67,
-          inquiries: 3,
-          createdAt: "2024-01-12",
-          thumbnail: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=60&h=60&fit=crop",
-          category: "Intellectual Property",
-          subcategory: "Copyright Law",
-        },
-        {
-          id: "5",
-          type: "education",
-          title: "Digital Photography Masterclass",
-          price: 149,
-          status: "active",
-          views: 312,
-          inquiries: 15,
-          createdAt: "2024-01-20",
-          thumbnail: "https://images.unsplash.com/photo-1606976722043-c1c5a3b8a8c9?w=60&h=60&fit=crop",
-          category: "Photography",
-          subcategory: "Digital Photography",
-        },
-        {
-          id: "6",
-          type: "product_service",
-          title: "Custom Logo Design",
-          price: 89,
-          status: "sold",
-          views: 178,
-          inquiries: 7,
-          createdAt: "2024-01-18",
-          thumbnail: "https://images.unsplash.com/photo-1541963463532-d68292c34d19?w=60&h=60&fit=crop",
-          category: "Design Services",
-          subcategory: "Logo Design",
-        },
-        {
-          id: "7",
-          type: "ticket",
-          title: "Art Gallery Opening Night",
-          price: 25,
-          status: "active",
-          views: 445,
-          inquiries: 22,
-          createdAt: "2024-01-22",
-          thumbnail: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=60&h=60&fit=crop",
-          category: "Art Events",
-          subcategory: "Gallery Opening",
-        },
-        {
-          id: "8",
-          type: "investment",
-          title: "Creative Startup Funding",
-          price: 50000,
-          status: "pending",
-          views: 89,
-          inquiries: 4,
-          createdAt: "2024-01-25",
-          thumbnail: "https://images.unsplash.com/photo-1559209172-716b6ff3f204?w=60&h=60&fit=crop",
-          category: "Angel Investment",
-          subcategory: "Seed Stage",
-        },
-      ];
+      if (!token || !userId) {
+        console.log("No access token or user ID found, using mock data");
+        setStats({
+          totalListings: 8,
+          totalPurchases: 3,
+          totalRevenue: 1040,
+          pendingBookings: 2,
+          activeListings: 6,
+          totalViews: 1420,
+        });
+        setListings([]);
+        setTransactions([]);
+        return;
+      }
 
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      // Fetch user data to get subscription_type and avatar_url
+      try {
+        const userResponse = await fetch(`http://localhost:5001/api/users/${userId}`, { headers });
+        if (userResponse.ok) {
+          const fetchedUserData = await userResponse.json();
+          setUserData(fetchedUserData); // Store full user data
+          
+          // Update user in context if subscription_type or avatar_url is available
+          // Only update if values actually changed to prevent infinite loops
+          if (user && setUser) {
+            const hasChanges = 
+              (fetchedUserData.subscription_type && fetchedUserData.subscription_type !== user.subscription_type) ||
+              (fetchedUserData.avatar_url && fetchedUserData.avatar_url !== user.avatar_url) ||
+              (fetchedUserData.display_name && fetchedUserData.display_name !== user.display_name);
+            
+            if (hasChanges) {
+              const updatedUser = {
+                ...user,
+                subscription_type: fetchedUserData.subscription_type || user.subscription_type,
+                avatar_url: fetchedUserData.avatar_url || user.avatar_url,
+                display_name: fetchedUserData.display_name || user.display_name,
+              };
+              setUser(updatedUser);
+              
+              // Also update localStorage
+              const storedUser = localStorage.getItem('user');
+              if (storedUser) {
+                try {
+                  const parsedUser = JSON.parse(storedUser);
+                  parsedUser.subscription_type = fetchedUserData.subscription_type || parsedUser.subscription_type;
+                  parsedUser.avatar_url = fetchedUserData.avatar_url || parsedUser.avatar_url;
+                  parsedUser.display_name = fetchedUserData.display_name || parsedUser.display_name;
+                  localStorage.setItem('user', JSON.stringify(parsedUser));
+                } catch (e) {
+                  console.error('Error updating stored user:', e);
+                }
+              }
+            }
+          }
+        }
+      } catch (userError) {
+        console.error('Error fetching user data:', userError);
+        // Continue with other fetches even if user fetch fails
+      }
+
+      // Fetch listings from all marketplaces
+      const [assetsResponse, talentsResponse, studiosResponse, ticketsResponse, legalResponse, productServicesResponse] = await Promise.all([
+        fetch(`http://localhost:5001/api/assets/user/${userId}`, { headers }),
+        fetch(`http://localhost:5001/api/talents/user/${userId}`, { headers }),
+        fetch(`http://localhost:5001/api/studios/user/${userId}`, { headers }),
+        fetch(`http://localhost:5001/api/tickets/user/${userId}`, { headers }),
+        fetch(`http://localhost:5001/api/legal/user/${userId}`, { headers }),
+        fetch(`http://localhost:5001/api/product-services/user/${userId}`, { headers })
+      ]);
+
+      // Process responses and combine into unified listings
+      const allListings: MarketplaceListing[] = [];
+
+      // Process assets
+      if (assetsResponse.ok) {
+        try {
+          const assetsData = await assetsResponse.json();
+          const assets = Array.isArray(assetsData) ? assetsData : (assetsData?.data || []);
+          if (Array.isArray(assets)) {
+            assets.forEach((asset: any) => {
+              allListings.push({
+                id: asset.id.toString(),
+                type: "asset",
+                title: asset.title || 'Untitled Asset',
+                price: parseFloat(asset.price) || 0,
+                status: asset.status === 'active' ? "active" : "pending",
+                views: 0, // Not available in current schema
+                inquiries: 0, // Not available in current schema
+                createdAt: asset.created_at || new Date().toISOString(),
+                thumbnail: asset.preview_images?.[0] || asset.avatar_url,
+                category: asset.category || 'Digital Art',
+                subcategory: asset.tags?.[0] || 'General',
+              });
+            });
+          }
+        } catch (error) {
+          console.error('Error processing assets:', error);
+        }
+      }
+
+      // Process talents
+      if (talentsResponse.ok) {
+        const talents = await talentsResponse.json();
+        talents.forEach((talent: any) => {
+          allListings.push({
+            id: talent.id.toString(),
+            type: "talent",
+            title: talent.title || 'Talent Service',
+            price: parseFloat(talent.hourly_rate) || 0,
+            status: talent.status === 'active' ? "active" : "pending",
+            views: 0,
+            inquiries: 0,
+            createdAt: talent.created_at || new Date().toISOString(),
+            thumbnail: talent.portfolio_urls?.[0] || talent.avatar_url,
+            category: talent.category || 'Services',
+            subcategory: talent.skills?.[0] || 'General',
+          });
+        });
+      }
+
+      // Process studios
+      if (studiosResponse.ok) {
+        const studios = await studiosResponse.json();
+        studios.forEach((studio: any) => {
+          allListings.push({
+            id: studio.id.toString(),
+            type: "studio",
+            title: studio.name || 'Studio Space',
+            price: 0, // Price not in current schema
+            status: "active",
+            views: 0,
+            inquiries: 0,
+            createdAt: studio.created_at || new Date().toISOString(),
+            thumbnail: undefined,
+            category: 'Studio',
+            subcategory: studio.description || 'General',
+          });
+        });
+      }
+
+      // Process tickets
+      if (ticketsResponse.ok) {
+        try {
+          const ticketsData = await ticketsResponse.json();
+          const tickets = Array.isArray(ticketsData) ? ticketsData : (ticketsData?.data || []);
+          if (Array.isArray(tickets)) {
+            tickets.forEach((ticket: any) => {
+              allListings.push({
+                id: ticket.id.toString(),
+                type: "ticket",
+                title: ticket.title || 'Event Ticket',
+                price: 0, // Price not in current schema
+                status: ticket.status === 'open' ? "active" : "pending",
+                views: 0,
+                inquiries: 0,
+                createdAt: ticket.created_at || new Date().toISOString(),
+                thumbnail: undefined,
+                category: ticket.ticket_type || 'Event',
+                subcategory: 'General',
+              });
+            });
+          }
+        } catch (error) {
+          console.error('Error processing tickets:', error);
+        }
+      }
+
+      // Process legal services
+      if (legalResponse.ok) {
+        const legalServices = await legalResponse.json();
+        legalServices.forEach((service: any) => {
+          allListings.push({
+            id: service.id.toString(),
+            type: "legal",
+            title: service.title || 'Legal Service',
+            price: 0, // Price not in current schema
+            status: "active",
+            views: 0,
+            inquiries: 0,
+            createdAt: service.created_at || new Date().toISOString(),
+            thumbnail: undefined,
+            category: 'Legal',
+            subcategory: service.description || 'General',
+          });
+        });
+      }
+
+      // Process product services
+      if (productServicesResponse.ok) {
+        const productServices = await productServicesResponse.json();
+        productServices.forEach((service: any) => {
+          allListings.push({
+            id: service.id.toString(),
+            type: "product_service",
+            title: service.title || 'Product/Service',
+            price: parseFloat(service.price) || 0,
+            status: service.status === 'active' ? "active" : "pending",
+            views: 0,
+            inquiries: 0,
+            createdAt: service.created_at || new Date().toISOString(),
+            thumbnail: service.images?.[0] || service.avatar_url,
+            category: service.category || 'General',
+            subcategory: service.subcategory || 'General',
+          });
+        });
+      }
+
+      // Fetch stats from API
+      try {
+        const statsResponse = await fetch(`http://localhost:5001/api/stats/user/${userId}`, { headers });
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          if (statsData.success && statsData.data) {
+            setStats({
+              totalListings: statsData.data.totalListings || 0,
+              totalPurchases: 0, // Not available in current API
+              totalRevenue: statsData.data.totalRevenue || 0,
+              pendingBookings: statsData.data.pendingBookings || 0,
+              activeListings: statsData.data.activeListings || 0,
+              totalViews: statsData.data.totalViews || 0,
+            });
+          } else {
+            // Fallback to calculated stats if API response is unexpected
+            const totalListings = allListings.length;
+            const activeListings = allListings.filter(l => l.status === 'active').length;
+            const totalRevenue = allListings.reduce((sum, listing) => sum + listing.price, 0);
+            const totalViews = allListings.reduce((sum, listing) => sum + listing.views, 0);
+            setStats({
+              totalListings,
+              totalPurchases: 0,
+              totalRevenue,
+              pendingBookings: allListings.filter(l => l.status === 'pending').length,
+              activeListings,
+              totalViews,
+            });
+          }
+        } else {
+          // Fallback to calculated stats if API fails
+          const totalListings = allListings.length;
+          const activeListings = allListings.filter(l => l.status === 'active').length;
+          const totalRevenue = allListings.reduce((sum, listing) => sum + listing.price, 0);
+          const totalViews = allListings.reduce((sum, listing) => sum + listing.views, 0);
+          setStats({
+            totalListings,
+            totalPurchases: 0,
+            totalRevenue,
+            pendingBookings: allListings.filter(l => l.status === 'pending').length,
+            activeListings,
+            totalViews,
+          });
+        }
+      } catch (statsError) {
+        console.warn("Error fetching stats from API, using calculated stats:", statsError);
+        // Fallback to calculated stats
+        const totalListings = allListings.length;
+        const activeListings = allListings.filter(l => l.status === 'active').length;
+        const totalRevenue = allListings.reduce((sum, listing) => sum + listing.price, 0);
+        const totalViews = allListings.reduce((sum, listing) => sum + listing.views, 0);
+        setStats({
+          totalListings,
+          totalPurchases: 0,
+          totalRevenue,
+          pendingBookings: allListings.filter(l => l.status === 'pending').length,
+          activeListings,
+          totalViews,
+        });
+      }
+
+      setListings(allListings);
+
+      // Mock transactions for now (not available in current API)
       const mockTransactions: Transaction[] = [
         {
           id: "1",
@@ -692,11 +925,11 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
         },
       ];
 
-      setListings(mockListings);
       setTransactions(mockTransactions);
+
     } catch (error) {
-      console.warn("Fallback: Error fetching dashboard data, using mock data:", error);
-      // Ensure we always have fallback stats even if there's an unexpected error
+      console.warn("Error fetching dashboard data, using mock data:", error);
+      // Fallback to mock data
       setStats({
         totalListings: 8,
         totalPurchases: 3,
@@ -705,6 +938,8 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
         activeListings: 6,
         totalViews: 1420,
       });
+      setListings([]);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -1042,10 +1277,11 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
           <div className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}>
             {renderPageHeader("marketplace")}
             <div className={isDarkMode ? "bg-[#171717]" : ""}>
-              <AssetMarketplaceAdmin
-                onAddToCart={onAddToCart}
-                cartItemCount={cartItemCount}
+              <AssetMarketplacePage 
                 isDashboardDarkMode={isDarkMode}
+                onAddToCart={onAddToCart || handleAddToCart}
+                onRemoveFromCart={handleRemoveFromCart}
+                cartItemCount={displayCartItemCount}
               />
             </div>
           </div>
@@ -1055,7 +1291,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
           <div className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}>
             {renderPageHeader("talent-marketplace")}
             <div className={isDarkMode ? "bg-[#171717]" : ""}>
-              <TalentMarketplaceAdmin isDashboardDarkMode={isDarkMode} />
+              <TalentMarketplacePage isDashboardDarkMode={isDarkMode} />
             </div>
           </div>
         );
@@ -1082,7 +1318,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
           <div className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}>
             {renderPageHeader("tickets")}
             <div className={isDarkMode ? "bg-[#171717]" : ""}>
-              <TicketsAdmin isDashboardDarkMode={isDarkMode} />
+              <TicketsMarketplacePage isDashboardDarkMode={isDarkMode} />
             </div>
           </div>
         );
@@ -1100,7 +1336,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
           <div className={`min-h-full w-full ${isDarkMode ? "bg-[#171717]" : ""}`}>
             {renderPageHeader("product-services")}
             <div className={isDarkMode ? "bg-[#171717]" : ""}>
-              <ProductServicesAdmin isDashboardDarkMode={isDarkMode} />
+              <ProductServicesPage isDashboardDarkMode={isDarkMode} />
             </div>
           </div>
         );
@@ -2159,17 +2395,20 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
           <SidebarHeader className={`h-[72px] p-6 border-b ${isDarkMode ? "!bg-[#171717] !border-gray-800" : "!bg-white !border-gray-200"}`}>
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10">
-                <AvatarImage src={user?.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face"} />
+                <AvatarImage 
+                  src={userData?.avatar_url || user?.avatar_url || user?.user_metadata?.avatar_url || ""} 
+                  alt={userData?.display_name || user?.display_name || user?.email || "User"} 
+                />
                 <AvatarFallback className="bg-[#FF8D28] text-white">
-                  {user?.email?.charAt(0).toUpperCase()}
+                  {(userData?.display_name || user?.display_name || user?.email || "U").charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className={`font-medium truncate ${isDarkMode ? "text-white" : "text-gray-900"}`}>
-                  {user?.user_metadata?.full_name || user?.email}
+                  {userData?.display_name || user?.display_name || user?.user_metadata?.full_name || user?.email || "User"}
                 </p>
                 <p className={`text-sm truncate ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                  {user?.email}
+                  {user?.email || "No email"}
                 </p>
               </div>
             </div>

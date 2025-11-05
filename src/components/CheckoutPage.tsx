@@ -7,7 +7,6 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { CreditCard, Lock, CheckCircle, ArrowLeft } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { projectId } from '../utils/supabase/info';
 
 interface CartItem {
   artwork_id: string;
@@ -152,9 +151,13 @@ export function CheckoutPage({ cart, userId, onPaymentComplete, onBack }: Checko
     try {
       const token = localStorage.getItem('access_token');
       
-      // Create payment intent
-      const paymentResponse = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/create-payment-intent`,
+      if (!token) {
+        throw new Error('Authentication required. Please sign in.');
+      }
+
+      // Checkout cart and create order
+      const checkoutResponse = await fetch(
+        `http://localhost:5001/api/cart/${userId}/checkout`,
         {
           method: 'POST',
           headers: {
@@ -162,47 +165,47 @@ export function CheckoutPage({ cart, userId, onPaymentComplete, onBack }: Checko
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            items: cart.items,
-            total_amount: totalAmount
+            paymentMethod: 'card',
+            transactionId: `txn_${Date.now()}`
           }),
         }
       );
 
-      if (!paymentResponse.ok) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      const paymentData = await paymentResponse.json();
-      
-      // Simulate payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Confirm payment
-      const confirmResponse = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/confirm-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            order_id: paymentData.order_id,
-            payment_intent_id: paymentData.payment_intent.id
-          }),
+      // Check if response is JSON before parsing
+      const contentType = checkoutResponse.headers.get('content-type');
+      if (!checkoutResponse.ok) {
+        let errorMessage = 'Failed to complete checkout';
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await checkoutResponse.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch {
+            // If error response is not JSON, use default message
+          }
+        } else {
+          const text = await checkoutResponse.text();
+          console.error('Non-JSON error response from checkout endpoint:', text.substring(0, 200));
+          errorMessage = 'Checkout service is not available. Please try again later or contact support.';
         }
-      );
-
-      if (!confirmResponse.ok) {
-        throw new Error('Payment confirmation failed');
+        throw new Error(errorMessage);
       }
 
-      const confirmData = await confirmResponse.json();
-      onPaymentComplete(confirmData.order.id);
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await checkoutResponse.text();
+        console.error('Non-JSON response from checkout endpoint:', text.substring(0, 200));
+        throw new Error('Checkout service is not available. Please try again later or contact support.');
+      }
+
+      const checkoutData = await checkoutResponse.json();
+      
+      // Use the first order ID for the callback, or create a summary if multiple orders
+      const orderId = checkoutData.data?.orderIds?.[0] || checkoutData.data?.orderIds?.join(',') || 'unknown';
+      onPaymentComplete(orderId.toString());
       
     } catch (error) {
       console.error('Payment error:', error);
-      alert('Payment failed. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Payment failed. Please try again.';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }

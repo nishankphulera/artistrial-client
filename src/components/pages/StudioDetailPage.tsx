@@ -28,6 +28,8 @@ import {
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Studio } from '../shared/StudioCard';
+import { formatPriceINR } from '@/utils/currency';
+import { toast } from 'sonner';
 
 interface StudioDetailPageProps {
   isDashboardDarkMode?: boolean;
@@ -53,60 +55,90 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
   }, [id]);
 
   const loadStudioDetails = async () => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      // Sample data for now - replace with actual API call
-      const sampleStudio: Studio = {
-        id: id || 'studio1',
-        name: 'Creative Light Studios',
-        type: 'Photography',
-        location: 'Brooklyn, NY',
-        address: '123 Art Street, Brooklyn, NY 11201',
-        hourlyRate: 75,
-        dailyRate: 450,
-        capacity: 15,
-        equipment: [
-          'Professional Lighting Kit',
-          'Canon EOS R5',
-          'Sony A7R IV', 
-          'Profoto B10 Plus',
-          'Seamless Backdrop',
-          'Reflectors & Diffusers',
-          'Tripods & Stands',
-          'Props Collection'
-        ],
+      const token = localStorage.getItem('access_token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+      const response = await fetch(`${API_URL}/api/studios/${id}`, {
+        headers,
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setStudio(null);
+          return;
+        }
+        throw new Error(`Failed to fetch studio: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Map API response to Studio interface
+      const mappedStudio: Studio = {
+        id: data.id.toString(),
+        name: data.title || data.name || 'Untitled Studio',
+        type: data.studio_type || 'Multi-Purpose',
+        location: data.city && data.state 
+          ? `${data.city}, ${data.state}` 
+          : data.city || data.state || data.country || 'Location not specified',
+        address: data.address || '',
+        hourlyRate: parseFloat(data.hourly_rate) || 0,
+        dailyRate: data.daily_rate ? parseFloat(data.daily_rate) : undefined,
+        capacity: data.capacity || 0,
+        equipment: Array.isArray(data.equipment) ? data.equipment : [],
         features: [
-          'Natural Light Windows',
-          'Blackout Capability',
-          'Makeup Station',
-          'Wardrobe Area',
-          'Client Lounge'
-        ],
-        images: [
-          'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop',
-          'https://images.unsplash.com/photo-1586227740560-8cf2732c1531?w=800&h=600&fit=crop',
-          'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop',
-          'https://images.unsplash.com/photo-1586227740582-e7b4b767f011?w=800&h=600&fit=crop',
-          'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=800&h=600&fit=crop',
-          'https://images.unsplash.com/photo-1586227740577-8ca50c1c20c5?w=800&h=600&fit=crop'
-        ],
-        availability: 'Available',
-        rating: 4.8,
-        total_reviews: 34,
-        description: 'Professional photography studio in the heart of Brooklyn featuring state-of-the-art equipment, flexible lighting setups, and a comfortable environment for all your creative projects. Perfect for fashion shoots, portraits, product photography, and video production.',
-        owner_id: 'owner123',
-        amenities: ['WiFi', 'Parking', 'Air Conditioning', 'Security System'],
-        policies: [
-          'No smoking inside the studio',
-          '24-hour advance booking required',
-          'Additional cleaning fee for messy shoots',
-          'Equipment damage deposit required'
-        ]
+          data.has_natural_light && 'Natural Light',
+          data.has_air_conditioning && 'Air Conditioning',
+          data.has_kitchen && 'Kitchen',
+          data.has_wifi && 'WiFi',
+          data.has_parking && 'Parking',
+          data.is_accessible && 'Accessible',
+        ].filter(Boolean) as string[],
+        images: Array.isArray(data.images) && data.images.length > 0
+          ? data.images
+          : ['https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop'],
+        availability: data.availability === 'available' || data.status === 'active' 
+          ? 'Available' 
+          : data.availability === 'booked' || data.status === 'inactive'
+          ? 'Booked'
+          : 'Limited',
+        rating: data.rating || 0,
+        total_reviews: data.total_reviews || 0,
+        description: data.description || '',
+        owner_id: data.owner_id?.toString() || '',
+        amenities: [
+          data.has_wifi && 'WiFi',
+          data.has_parking && 'Parking',
+          data.has_air_conditioning && 'Air Conditioning',
+          data.has_kitchen && 'Kitchen',
+          data.is_accessible && 'Accessible',
+          data.allows_events && 'Events Allowed',
+          data.allows_commercial && 'Commercial Use',
+        ].filter(Boolean) as string[],
+        policies: Array.isArray(data.rules) ? data.rules : data.rules 
+          ? [data.rules] 
+          : data.cancellation_policy 
+          ? [data.cancellation_policy]
+          : [],
       };
 
-      setStudio(sampleStudio);
+      setStudio(mappedStudio);
     } catch (error) {
       console.error('Error loading studio details:', error);
+      setStudio(null);
     } finally {
       setLoading(false);
     }
@@ -124,18 +156,42 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
 
   const handleBookStudio = () => {
     if (!user) {
-      alert('Please sign in to book this studio');
+      toast.error('Sign In Required', {
+        description: 'Please sign in to book this studio.',
+        duration: 3000,
+      });
+      router.push('/auth');
       return;
     }
-    console.log('Booking studio:', studio);
-    // Handle booking logic here
+    // Handle booking logic here - redirect to booking page or show booking modal
+    toast.info('Booking Feature', {
+      description: 'Booking functionality will be available soon.',
+      duration: 3000,
+    });
+  };
+
+  const handleContactOwner = () => {
+    if (!user) {
+      toast.error('Sign In Required', {
+        description: 'Please sign in to contact the owner.',
+        duration: 3000,
+      });
+      router.push('/auth');
+      return;
+    }
+    // Handle contact logic here
+    toast.info('Contact Feature', {
+      description: 'Contact functionality will be available soon.',
+      duration: 3000,
+    });
   };
 
   if (loading) {
     return (
-      <div className={`min-h-screen ${isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'} flex items-center justify-center`}>
-        <div className="text-center">
-          <div className="animate-pulse">Loading studio details...</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF8D28] mx-auto"></div>
+          <p className="text-sm text-gray-600">Loading studio details...</p>
         </div>
       </div>
     );
@@ -143,10 +199,16 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
 
   if (!studio) {
     return (
-      <div className={`min-h-screen ${isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'} flex items-center justify-center`}>
-        <div className="text-center">
-          <h2 className="font-title text-xl mb-4">Studio not found</h2>
-          <Button onClick={() => router.push('/studios')}>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Building className="h-16 w-16 mx-auto text-gray-400" />
+          <h2 className="font-title text-2xl text-gray-900">Studio not found</h2>
+          <p className="text-gray-600">The studio you're looking for doesn't exist or has been removed.</p>
+          <Button 
+            onClick={() => router.push('/dashboard/marketplace/studios')}
+            className="bg-[#FF8D28] hover:bg-[#FF8D28]/90"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Studios
           </Button>
         </div>
@@ -155,7 +217,7 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
   }
 
   return (
-    <div className={`min-h-screen ${isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'}`}>
+    <div className="min-h-screen bg-white">
       
       {/* Header - Only show if not in dashboard context */}
       {!isInDashboard && (
@@ -190,8 +252,8 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
           <div className="mb-6">
             <Button
               variant="ghost"
-              onClick={() => router.push('/dashboard/studios')}
-              className="flex items-center gap-2 mb-4"
+              onClick={() => router.push('/dashboard/marketplace/studios')}
+              className="flex items-center gap-2 mb-4 text-gray-700 hover:text-gray-900"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Studios
@@ -202,224 +264,332 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Featured Image */}
-            <Card className="overflow-hidden">
-              <ImageWithFallback
-                src={studio.images[0]}
-                alt={`${studio.name} main view`}
-                className="w-full h-64 lg:h-80 object-cover"
-              />
-            </Card>
-
-            {/* About Section */}
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-[#FF8D28]/10 rounded-lg">
+            {/* Featured Image - Modern Hero Section */}
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+              <div className="aspect-video bg-gradient-to-br from-[#FF8D28]/20 to-[#FF8D28]/5">
+                <ImageWithFallback
+                  src={studio.images[0]}
+                  alt={`${studio.name} main view`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              {/* Gradient Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+              
+              {/* Studio Info Overlay */}
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg">
                     {getStudioIcon(studio.type)}
                   </div>
                   <div>
-                    <h2 className="font-title text-xl">About {studio.name}</h2>
-                    <p className="text-muted-foreground">{studio.type} Studio</p>
+                    <h1 className="text-3xl font-bold text-white mb-1">{studio.name}</h1>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <MapPin className="h-4 w-4" />
+                      <span className="text-sm">{studio.location}</span>
+                    </div>
                   </div>
                 </div>
                 
-                <p className="text-muted-foreground leading-relaxed mb-6">
-                  {studio.description}
-                </p>
+                <div className="flex items-center gap-4 mt-4">
+                  <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full">
+                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    <span className="text-white font-medium">{studio.rating.toFixed(1)}</span>
+                    <span className="text-white/70 text-sm">({studio.total_reviews})</span>
+                  </div>
+                  <Badge 
+                    className={`${
+                      studio.availability === "Available"
+                        ? "bg-green-500/90 text-white"
+                        : studio.availability === "Limited"
+                        ? "bg-yellow-500/90 text-white"
+                        : "bg-red-500/90 text-white"
+                    } backdrop-blur-md`}
+                  >
+                    {studio.availability}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* About Section - Modernized */}
+            <Card className="bg-white shadow-lg border border-gray-200">
+              <CardContent className="p-8">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold mb-2 text-gray-900">
+                    About This Studio
+                  </h2>
+                  <p className="text-gray-600 leading-relaxed">
+                    {studio.description || 'No description available.'}
+                  </p>
+                </div>
                 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-title text-primary">
-                      {studio.capacity}
+                {/* Stats Grid - Modern Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-[#FF8D28]/10 to-[#FF8D28]/5 border border-[#FF8D28]/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-5 w-5 text-[#FF8D28]" />
+                      <span className="text-2xl font-bold text-gray-900">
+                        {studio.capacity}
+                      </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">Max Capacity</div>
+                    <div className="text-xs text-gray-600">Max Capacity</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-title text-primary">
-                      {studio.equipment.length}
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Camera className="h-5 w-5 text-blue-600" />
+                      <span className="text-2xl font-bold text-gray-900">
+                        {studio.equipment.length}
+                      </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">Equipment</div>
+                    <div className="text-xs text-gray-600">Equipment</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-title text-primary">
-                      {studio.total_reviews}
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100/50 border border-yellow-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                      <span className="text-2xl font-bold text-gray-900">
+                        {studio.total_reviews}
+                      </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">Reviews</div>
+                    <div className="text-xs text-gray-600">Reviews</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-title text-primary">
-                      24/7
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-5 w-5 text-green-600" />
+                      <span className="text-2xl font-bold text-gray-900">
+                        24/7
+                      </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">Access</div>
+                    <div className="text-xs text-gray-600">Access</div>
                   </div>
                 </div>
 
+                {/* Equipment & Features - Modern Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <h3 className="font-title text-lg mb-3">Equipment Available</h3>
+                    <h3 className="font-semibold text-lg mb-4 text-gray-900">
+                      Equipment Available
+                    </h3>
                     <div className="space-y-2">
-                      {studio.equipment.map((item, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-sm">{item}</span>
-                        </div>
-                      ))}
+                      {studio.equipment.length > 0 ? (
+                        studio.equipment.map((item, index) => (
+                          <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-gray-700">{item}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">No equipment listed</p>
+                      )}
                     </div>
                   </div>
                   
                   <div>
-                    <h3 className="font-title text-lg mb-3">Studio Features</h3>
+                    <h3 className="font-semibold text-lg mb-4 text-gray-900">
+                      Studio Features
+                    </h3>
                     <div className="space-y-2">
-                      {studio.features.map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-sm">{feature}</span>
-                        </div>
-                      ))}
+                      {studio.features.length > 0 ? (
+                        studio.features.map((feature, index) => (
+                          <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            <span className="text-sm text-gray-700">{feature}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">No features listed</p>
+                      )}
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Studio Gallery */}
-            <Card>
-              <CardContent className="p-6">
-                <h2 className="font-title text-xl mb-4">Studio Gallery</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  {studio.images.slice(1).map((image, index) => (
-                    <div key={index} className="aspect-square overflow-hidden rounded-lg">
-                      <ImageWithFallback
-                        src={image}
-                        alt={`Studio view ${index + 1}`}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            {/* Studio Gallery - Modernized */}
+            {studio.images.length > 1 && (
+              <Card className="bg-white shadow-lg border border-gray-200">
+                <CardContent className="p-8">
+                  <h2 className="text-2xl font-bold mb-6 text-gray-900">
+                    Studio Gallery
+                  </h2>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {studio.images.slice(1).map((image, index) => (
+                      <div 
+                        key={index} 
+                        className="relative aspect-square overflow-hidden rounded-xl group cursor-pointer shadow-md hover:shadow-xl transition-all duration-300"
+                      >
+                        <ImageWithFallback
+                          src={image}
+                          alt={`Studio view ${index + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Policies */}
-            <Card>
-              <CardContent className="p-6">
-                <h2 className="font-title text-xl mb-4">Studio Policies</h2>
-                <div className="space-y-2">
-                  {studio.policies?.map((policy, index) => (
-                    <div key={index} className="flex items-start gap-2">
-                      <Shield className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <span className="text-sm">{policy}</span>
+            {/* Policies - Modernized */}
+            {studio.policies && studio.policies.length > 0 && (
+              <Card className="bg-white shadow-lg border border-gray-200">
+                <CardContent className="p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 rounded-lg bg-gray-100">
+                      <Shield className="h-5 w-5 text-gray-700" />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      Studio Policies
+                    </h2>
+                  </div>
+                  <div className="space-y-3">
+                    {studio.policies.map((policy, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                      >
+                        <Shield className="h-4 w-4 mt-0.5 flex-shrink-0 text-gray-600" />
+                        <span className="text-sm text-gray-700">{policy}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Book Studio & Contact Card (Keep as requested) */}
           <div className="space-y-6">
-            {/* Booking Card */}
-            <Card className="sticky top-24">
+            {/* Booking Card - Modernized but keeping the same layout */}
+            <Card className="sticky top-24 bg-white shadow-xl border border-gray-200">
               <CardContent className="p-6">
-                <div className="text-center mb-6">
-                  <h1 className="font-title text-2xl mb-2">{studio.name}</h1>
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
+                {/* Header Section */}
+                <div className="text-center mb-6 pb-6 border-b border-gray-200">
+                  <h1 className="font-bold text-2xl mb-3 text-gray-900">
+                    {studio.name}
+                  </h1>
+                  <div className="flex items-center justify-center gap-2 text-sm mb-4 text-gray-600">
                     <MapPin className="h-4 w-4" />
-                    <span>{studio.address}</span>
+                    <span className="text-center">{studio.address || studio.location}</span>
                   </div>
                   
-                  <div className="flex items-center justify-center gap-1 mb-4">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">{studio.rating}</span>
-                    <span className="text-sm text-muted-foreground">
-                      ({studio.total_reviews} reviews)
+                  <div className="flex items-center justify-center gap-2 mb-4">
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="font-semibold text-gray-900">
+                        {studio.rating.toFixed(1)}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      ({studio.total_reviews} {studio.total_reviews === 1 ? 'review' : 'reviews'})
                     </span>
                   </div>
 
                   <Badge
-                    variant={
+                    className={`${
                       studio.availability === "Available"
-                        ? "default"
+                        ? "bg-green-500 text-white"
                         : studio.availability === "Limited"
-                        ? "secondary"
-                        : "outline"
-                    }
-                    className="mb-6"
+                        ? "bg-yellow-500 text-white"
+                        : "bg-red-500 text-white"
+                    } px-3 py-1`}
                   >
                     {studio.availability}
                   </Badge>
                 </div>
 
-                <div className="space-y-4 mb-6">
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Hourly Rate</span>
+                {/* Pricing Section - Modern Cards */}
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-[#FF8D28]/10 to-[#FF8D28]/5 border border-[#FF8D28]/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-white">
+                        <DollarSign className="h-4 w-4 text-[#FF8D28]" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Hourly Rate
+                      </span>
                     </div>
-                    <span className="font-title text-lg text-[#FF8D28]">${studio.hourlyRate}</span>
+                    <span className="font-bold text-xl text-[#FF8D28]">
+                      {formatPriceINR(studio.hourlyRate, true)}
+                    </span>
                   </div>
                   
                   {studio.dailyRate && (
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">Daily Rate</span>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100/50 border border-blue-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-white">
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-700">
+                          Daily Rate
+                        </span>
                       </div>
-                      <span className="font-title text-lg text-[#FF8D28]">${studio.dailyRate}</span>
+                      <span className="font-bold text-xl text-blue-600">
+                        {formatPriceINR(studio.dailyRate, true)}
+                      </span>
                     </div>
                   )}
                   
-                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Capacity</span>
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-white">
+                        <Users className="h-4 w-4 text-gray-600" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Capacity
+                      </span>
                     </div>
-                    <span className="font-medium">{studio.capacity} people</span>
+                    <span className="font-semibold text-gray-900">
+                      {studio.capacity} {studio.capacity === 1 ? 'person' : 'people'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="space-y-4 mb-6">
-                  <h3 className="font-title text-lg">Amenities</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {studio.amenities?.includes('WiFi') && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Wifi className="h-4 w-4 text-green-500" />
-                        <span>WiFi</span>
-                      </div>
-                    )}
-                    {studio.amenities?.includes('Parking') && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Car className="h-4 w-4 text-green-500" />
-                        <span>Parking</span>
-                      </div>
-                    )}
-                    {studio.amenities?.includes('Air Conditioning') && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="h-4 w-4 text-green-500" />
-                        <span>A/C</span>
-                      </div>
-                    )}
-                    {studio.amenities?.includes('Security System') && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Shield className="h-4 w-4 text-green-500" />
-                        <span>Security</span>
-                      </div>
-                    )}
+                {/* Amenities Section */}
+                {studio.amenities && studio.amenities.length > 0 && (
+                  <div className="mb-6 pb-6 border-b border-gray-200">
+                    <h3 className="font-semibold text-lg mb-4 text-gray-900">
+                      Amenities
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {studio.amenities.map((amenity, index) => {
+                        const getIcon = () => {
+                          if (amenity.includes('WiFi') || amenity.includes('Wifi')) return <Wifi className="h-4 w-4 text-green-500" />;
+                          if (amenity.includes('Parking')) return <Car className="h-4 w-4 text-green-500" />;
+                          if (amenity.includes('Air Conditioning') || amenity.includes('A/C')) return <Clock className="h-4 w-4 text-green-500" />;
+                          if (amenity.includes('Security')) return <Shield className="h-4 w-4 text-green-500" />;
+                          return <CheckCircle className="h-4 w-4 text-green-500" />;
+                        };
+                        return (
+                          <div key={index} className="flex items-center gap-2 text-sm">
+                            {getIcon()}
+                            <span className="text-gray-700">
+                              {amenity.replace('Air Conditioning', 'A/C')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
+                {/* Action Buttons - Enhanced */}
                 <div className="space-y-3">
                   <Button 
-                    className="w-full bg-[#FF8D28] hover:bg-[#FF8D28]/90"
+                    className="w-full bg-[#FF8D28] hover:bg-[#FF8D28]/90 text-white font-semibold py-6 text-base shadow-lg hover:shadow-xl transition-all"
                     onClick={handleBookStudio}
                   >
-                    <Calendar className="h-4 w-4 mr-2" />
+                    <Calendar className="h-5 w-5 mr-2" />
                     Book Studio
                   </Button>
                   
-                  <Button variant="outline" className="w-full">
-                    <MessageSquare className="h-4 w-4 mr-2" />
+                  <Button 
+                    variant="outline" 
+                    className="w-full py-6 text-base border-2 border-gray-300 hover:bg-gray-50"
+                    onClick={handleContactOwner}
+                  >
+                    <MessageSquare className="h-5 w-5 mr-2" />
                     Contact Owner
                   </Button>
                 </div>

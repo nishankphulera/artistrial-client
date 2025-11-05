@@ -21,15 +21,10 @@ import {
   Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  projectId,
-  publicAnonKey,
-} from "@/utils/supabase/info";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { useSupabase } from "@/components/providers/SupabaseProvider";
 
 interface FeaturedArtwork {
   id: string;
@@ -65,7 +60,6 @@ interface FeaturedStudio {
 
 export const HomePage: React.FC = () => {
   const { user } = useAuth();
-  const supabase = useSupabase();
   const router = useRouter();
   const [featuredArtworks, setFeaturedArtworks] = useState<
     FeaturedArtwork[]
@@ -77,62 +71,80 @@ export const HomePage: React.FC = () => {
     FeaturedStudio[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [platformStats, setPlatformStats] = useState({
+    communityMembers: '50K+',
+    projectsCompleted: '25K+',
+    revenueGenerated: '$10M+'
+  });
 
   useEffect(() => {
     fetchFeaturedArtworks();
     fetchFeaturedTalent();
     fetchFeaturedStudios();
+    fetchPlatformStats();
     seedDemoData();
   }, []);
 
   const seedDemoData = async () => {
+    // Seed demo data is not needed with local server
+    // Data is managed directly through the API
+    console.log("Using local server API - no seed needed");
+  };
+
+  const fetchPlatformStats = async () => {
     try {
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/seed-demo-data`,
+        `http://localhost:5001/api/stats`,
         {
-          method: "POST",
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
-        },
+        }
       );
 
       if (response.ok) {
-        console.log("Demo data seeded successfully");
-      } else {
-        console.log(
-          "Demo data may already exist or failed to seed",
-        );
+        const data = await response.json();
+        if (data.success && data.data) {
+          setPlatformStats({
+            communityMembers: data.data.community_members_formatted || '50K+',
+            projectsCompleted: data.data.projects_completed_formatted || '25K+',
+            revenueGenerated: data.data.revenue_generated_formatted || '$10M+'
+          });
+        }
       }
     } catch (error) {
-      console.log("Error seeding demo data:", error);
+      console.error('Error fetching platform stats:', error);
+      // Keep default values if API call fails
     }
   };
 
   const fetchFeaturedArtworks = async () => {
     try {
-      // Try to fetch real artworks from the server
+      // Try to fetch real artworks from the local server
       try {
         const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/artworks?limit=6`,
+          `http://localhost:5001/api/assets?limit=6&status=active`,
           {
             headers: {
-              Authorization: `Bearer ${publicAnonKey}`,
+              'Content-Type': 'application/json',
             },
           },
         );
 
         if (response.ok) {
           const data = await response.json();
-          if (data.artworks && data.artworks.length > 0) {
+          // Handle both array response and object with data property
+          const assets = Array.isArray(data) ? data : (data.data || data.assets || []);
+          
+          if (assets && assets.length > 0) {
             const featuredArtworks: FeaturedArtwork[] =
-              data.artworks.slice(0, 3).map((artwork: any) => ({
-                id: artwork.id,
-                title: artwork.title,
-                artist_name: artwork.artist_name,
-                thumbnail_url: artwork.image_url,
-                media_type: artwork.media_type || "image",
-                price: artwork.price,
+              assets.slice(0, 6).map((asset: any) => ({
+                id: asset.id?.toString() || asset.id,
+                title: asset.title,
+                artist_name: asset.artist_name || 'Unknown Artist',
+                thumbnail_url: asset.preview_images?.[0] || asset.image_url || '',
+                media_type: asset.file_format || asset.category || "image",
+                price: parseFloat(asset.price || 0),
                 currency: "USD",
               }));
             setFeaturedArtworks(featuredArtworks);
@@ -143,6 +155,7 @@ export const HomePage: React.FC = () => {
       } catch (error) {
         console.log(
           "Failed to fetch real artworks, using fallback",
+          error,
         );
       }
 
@@ -190,31 +203,33 @@ export const HomePage: React.FC = () => {
 
   const fetchFeaturedTalent = async () => {
     try {
-      // Try to fetch real talent from the server
+      // Try to fetch real talent from the local server
       try {
         const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/talent?limit=3`,
+          `http://localhost:5001/api/talents?limit=3&status=active`,
           {
             headers: {
-              Authorization: `Bearer ${publicAnonKey}`,
+              'Content-Type': 'application/json',
             },
           },
         );
 
         if (response.ok) {
           const data = await response.json();
-          if (data.talent && data.talent.length > 0) {
-            const featuredTalent: FeaturedTalent[] = data.talent
-              .slice(0, 3)
-              .map((talent: any) => ({
-                id: talent.id,
+          // Handle both array response and object with data property
+          const talents = Array.isArray(data) ? data : (data.data || data.talent || []);
+          
+          if (talents && talents.length > 0) {
+            const featuredTalent: FeaturedTalent[] =
+              talents.slice(0, 3).map((talent: any) => ({
+                id: talent.id?.toString() || talent.id,
                 title: talent.title,
-                name: talent.name,
+                name: talent.title || 'Talent',
                 skills: talent.skills || [],
-                rate: talent.rate,
-                image_url: talent.image_url,
-                location: talent.location,
-                rating: talent.rating || 4.5,
+                rate: parseFloat(talent.hourly_rate || talent.rate || 0),
+                image_url: talent.avatar_url || talent.image_url || '',
+                location: talent.location || '',
+                rating: parseFloat(talent.rating || talent.average_rating || 4.5),
               }));
             setFeaturedTalent(featuredTalent);
             return;
@@ -275,30 +290,33 @@ export const HomePage: React.FC = () => {
 
   const fetchFeaturedStudios = async () => {
     try {
-      // Try to fetch real studios from the server
+      // Try to fetch real studios from the local server
       try {
         const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/studios?limit=3`,
+          `http://localhost:5001/api/studios?limit=3`,
           {
             headers: {
-              Authorization: `Bearer ${publicAnonKey}`,
+              'Content-Type': 'application/json',
             },
           },
         );
 
         if (response.ok) {
           const data = await response.json();
-          if (data.studios && data.studios.length > 0) {
+          // Handle both array response and object with studios property
+          const studios = Array.isArray(data) ? data : (data.studios || data.data || []);
+          
+          if (studios && studios.length > 0) {
             const featuredStudios: FeaturedStudio[] =
-              data.studios.slice(0, 3).map((studio: any) => ({
-                id: studio.id,
+              studios.slice(0, 3).map((studio: any) => ({
+                id: studio.id?.toString() || studio.id,
                 name: studio.name,
-                location: studio.location,
-                price_per_hour: studio.price_per_hour,
-                features: studio.features || [],
-                image_url: studio.image_url,
-                rating: studio.rating || 4.5,
-                type: studio.type,
+                location: studio.location || studio.address || '',
+                price_per_hour: parseFloat(studio.hourly_rate || studio.price_per_hour || 0),
+                features: studio.features || studio.amenities || [],
+                image_url: studio.image_url || studio.images?.[0] || '',
+                rating: parseFloat(studio.rating || studio.average_rating || 4.5),
+                type: studio.studio_type || studio.type || 'Studio',
               }));
             setFeaturedStudios(featuredStudios);
             return;
@@ -307,6 +325,7 @@ export const HomePage: React.FC = () => {
       } catch (error) {
         console.log(
           "Failed to fetch real studios, using fallback",
+          error,
         );
       }
 
@@ -505,7 +524,7 @@ export const HomePage: React.FC = () => {
               <div className="grid grid-cols-3 gap-6 pt-8">
                 <div className="text-center">
                   <div className="text-3xl font-bold text-purple-600 font-title">
-                    50K+
+                    {platformStats.communityMembers}
                   </div>
                   <div className="text-sm text-gray-600">
                     Community Members
@@ -513,7 +532,7 @@ export const HomePage: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-pink-600 font-title">
-                    25K+
+                    {platformStats.projectsCompleted}
                   </div>
                   <div className="text-sm text-gray-600">
                     Projects Completed
@@ -521,7 +540,7 @@ export const HomePage: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-purple-600 font-title">
-                    $10M+
+                    {platformStats.revenueGenerated}
                   </div>
                   <div className="text-sm text-gray-600">
                     Revenue Generated

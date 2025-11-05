@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, Building, Camera, MapPin, Clock, DollarSign, Users } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
 
 interface StudioFormData {
   title: string;
@@ -97,6 +97,8 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
   const [newRule, setNewRule] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const imagePreviewsRef = useRef<string[]>([]);
 
   // Track form changes to detect unsaved changes
   useEffect(() => {
@@ -189,12 +191,43 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
 
   const handleFileChange = (files: FileList | null) => {
     if (files) {
+      const fileArray = Array.from(files);
       setFormData(prev => ({
         ...prev,
-        images: Array.from(files)
+        images: fileArray
       }));
+      
+      // Create preview URLs for the images
+      const previews = fileArray.map(file => URL.createObjectURL(file));
+      setImagePreviews(previews);
+      imagePreviewsRef.current = previews;
     }
   };
+
+  const removeImage = (index: number) => {
+    // Revoke the object URL to free memory
+    if (imagePreviews[index]) {
+      URL.revokeObjectURL(imagePreviews[index]);
+    }
+    
+    // Remove from both arrays
+    const newImages = formData.images.filter((_, i) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+    
+    setFormData(prev => ({
+      ...prev,
+      images: newImages
+    }));
+    setImagePreviews(newPreviews);
+    imagePreviewsRef.current = newPreviews;
+  };
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      imagePreviewsRef.current.forEach(preview => URL.revokeObjectURL(preview));
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,38 +237,71 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
     
     try {
       const token = localStorage.getItem('access_token');
+      console.log("token in studio listing form", token);
       
-      // Create FormData for file uploads
-      const formDataToSend = new FormData();
+      // Upload images to S3 first
+      let imageUrls: string[] = [];
+      if (formData.images.length > 0) {
+        try {
+          toast.info('Uploading images...');
+          imageUrls = await uploadMultipleImagesToS3(formData.images, 'studios');
+          toast.success(`Successfully uploaded ${imageUrls.length} image(s)`);
+        } catch (error) {
+          toast.error('Failed to upload images. Please try again.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
-      // Add text fields
-      const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'studio',
-        hourlyRate: parseFloat(formData.hourlyRate) || 0,
-        dailyRate: parseFloat(formData.dailyRate) || 0,
-        weeklyRate: parseFloat(formData.weeklyRate) || 0,
+      // Map form data to backend API schema
+      const studioData = {
+        user_id: user.id,
+        title: formData.title,
+        studio_type: formData.studioType,
+        description: formData.description,
+        hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+        daily_rate: formData.dailyRate ? parseFloat(formData.dailyRate) : null,
+        weekly_rate: formData.weeklyRate ? parseFloat(formData.weeklyRate) : null,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state || null,
+        country: formData.country,
+        zip_code: formData.zipCode || null,
+        size: formData.size || null,
+        capacity: formData.capacity || null,
+        amenities: formData.amenities,
+        equipment: formData.equipment,
+        rules: formData.rules,
+        availability: formData.availability,
+        booking_advance: formData.bookingAdvance || null,
+        cancellation_policy: formData.cancellationPolicy || null,
+        access_instructions: formData.accessInstructions || null,
+        parking_info: formData.parkingInfo || null,
+        public_transport: formData.publicTransport || null,
+        nearby_landmarks: formData.nearbyLandmarks || null,
+        images: imageUrls, // Add uploaded image URLs
+        has_natural_light: formData.hasNaturalLight,
+        has_air_conditioning: formData.hasAirConditioning,
+        has_kitchen: formData.hasKitchen,
+        has_wifi: formData.hasWifi,
+        has_parking: formData.hasParking,
+        is_accessible: formData.isAccessible,
+        allows_events: formData.allowsEvents,
+        allows_commercial: formData.allowsCommercial,
+        allows_food: formData.allowsFood,
         status: 'active'
       };
 
-      // Remove images field from listing data
-      const { images, ...textData } = listingData;
-      formDataToSend.append('data', JSON.stringify(textData));
-
-      // Add images
-      formData.images.forEach(file => {
-        formDataToSend.append('images', file);
-      });
-
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/studio`,
+        `${API_URL}/api/studios`,
         {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: formDataToSend,
+          body: JSON.stringify(studioData),
         }
       );
 
@@ -243,14 +309,54 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
         toast.success('Studio listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
         if (onClose) onClose();
-        // Reset form would go here
+        // Clean up image preview URLs
+        imagePreviewsRef.current.forEach(preview => URL.revokeObjectURL(preview));
+        setImagePreviews([]);
+        imagePreviewsRef.current = [];
+        
+        // Reset form
+        setFormData({
+          title: '',
+          studioType: '',
+          description: '',
+          hourlyRate: '',
+          dailyRate: '',
+          weeklyRate: '',
+          address: '',
+          city: '',
+          state: '',
+          country: '',
+          zipCode: '',
+          size: '',
+          capacity: '',
+          amenities: [],
+          equipment: [],
+          rules: [],
+          availability: [],
+          bookingAdvance: '',
+          cancellationPolicy: '',
+          accessInstructions: '',
+          parkingInfo: '',
+          publicTransport: '',
+          nearbyLandmarks: '',
+          images: [],
+          hasNaturalLight: false,
+          hasAirConditioning: false,
+          hasKitchen: false,
+          hasWifi: false,
+          hasParking: false,
+          isAccessible: false,
+          allowsEvents: false,
+          allowsCommercial: false,
+          allowsFood: false
+        });
       } else {
         const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to create listing');
+        toast.error(errorData.error || 'Failed to create studio listing');
       }
     } catch (error) {
       console.error('Error creating studio listing:', error);
-      toast.error('Failed to create listing');
+      toast.error('Failed to create studio listing');
     } finally {
       setIsSubmitting(false);
     }
@@ -595,9 +701,59 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
               </div>
             </div>
 
+            {/* Additional Information */}
+            <div className="space-y-4">
+              <Label>Additional Information</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="accessInstructions">Access Instructions</Label>
+                  <Textarea
+                    id="accessInstructions"
+                    value={formData.accessInstructions}
+                    onChange={(e) => setFormData(prev => ({ ...prev, accessInstructions: e.target.value }))}
+                    placeholder="How to access the studio, door codes, etc."
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="parkingInfo">Parking Information</Label>
+                  <Textarea
+                    id="parkingInfo"
+                    value={formData.parkingInfo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, parkingInfo: e.target.value }))}
+                    placeholder="Parking details, costs, restrictions"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="publicTransport">Public Transportation</Label>
+                  <Textarea
+                    id="publicTransport"
+                    value={formData.publicTransport}
+                    onChange={(e) => setFormData(prev => ({ ...prev, publicTransport: e.target.value }))}
+                    placeholder="Nearest stations, bus routes, etc."
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="nearbyLandmarks">Nearby Landmarks</Label>
+                  <Textarea
+                    id="nearbyLandmarks"
+                    value={formData.nearbyLandmarks}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nearbyLandmarks: e.target.value }))}
+                    placeholder="Landmarks, restaurants, shops nearby"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Studio Images */}
             <div>
-              <Label htmlFor="images">Studio Images *</Label>
+              <Label htmlFor="images">Studio Images</Label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Camera className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <Label htmlFor="images" className="cursor-pointer">
@@ -619,6 +775,62 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
                   </p>
                 )}
               </div>
+              
+              {/* Image Previews - Matching Studio Detail Page Layout */}
+              {imagePreviews.length > 0 && (
+                <div className="mt-6 space-y-6">
+                  {/* Featured Image (First Image) - Hero Style */}
+                  <div>
+                    <Label className="text-sm font-semibold mb-2 block">Featured Image</Label>
+                    <div className="relative group aspect-video rounded-xl overflow-hidden shadow-lg border border-gray-200">
+                      <img
+                        src={imagePreviews[0]}
+                        alt="Featured studio image"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(0)}
+                        className="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        aria-label="Remove featured image"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Gallery Images (Remaining Images) */}
+                  {imagePreviews.length > 1 && (
+                    <div>
+                      <Label className="text-sm font-semibold mb-2 block">Studio Gallery</Label>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                        {imagePreviews.slice(1).map((preview, index) => (
+                          <div 
+                            key={index + 1} 
+                            className="relative group aspect-square rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200"
+                          >
+                            <img
+                              src={preview}
+                              alt={`Studio view ${index + 2}`}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index + 1)}
+                              className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                              aria-label="Remove image"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Submit */}

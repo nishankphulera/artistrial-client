@@ -26,7 +26,12 @@ export default function RootLayout({
               <ConditionalNavigation />
               {children}
               <ConditionalFooter />
-              <Toaster position="top-right" />
+              <Toaster 
+                position="top-right" 
+                closeButton 
+                richColors
+                expand={true}
+              />
             </AudioPlayerProvider>
           </AuthProvider>
         </SupabaseProvider>

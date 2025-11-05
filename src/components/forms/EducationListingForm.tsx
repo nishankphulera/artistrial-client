@@ -12,6 +12,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { createListingCreationEvent } from '@/utils/userEvents';
 
 interface EducationFormData {
   title: string;
@@ -313,7 +314,7 @@ export const EducationListingForm: React.FC<{ onClose?: () => void }> = ({ onClo
       };
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/education`,
+        `http://localhost:5001/api/education`,
         {
           method: 'POST',
           headers: {
@@ -325,6 +326,28 @@ export const EducationListingForm: React.FC<{ onClose?: () => void }> = ({ onClo
       );
 
       if (response.ok) {
+        const responseData = await response.json();
+        const educationId = responseData.data?.id || responseData.id;
+        
+        // Create user event for education creation
+        if (educationId) {
+          await createListingCreationEvent(
+            user.id,
+            'education',
+            educationId,
+            formData.title,
+            `Created education listing: ${formData.title} in ${formData.category}`,
+            {
+              category: formData.category,
+              subcategory: formData.subcategory,
+              price: formData.pricingType === 'free' ? 0 : parseFloat(formData.price),
+              level: formData.level,
+              format: formData.format,
+              start_date: formData.startDate
+            }
+          );
+        }
+        
         toast.success('Education listing created successfully!');
         setHasUnsavedChanges(false);
         if (onClose) onClose();

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Trash2, Plus, Minus, ShoppingCart, CreditCard } from 'lucide-react';
+import { Trash2, ShoppingCart, MapPin } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { projectId } from '../utils/supabase/info';
+import { toast } from 'sonner';
+import { formatPriceINR } from '@/utils/currency';
 
 interface CartItem {
   artwork_id: string;
@@ -31,9 +33,11 @@ interface CartPageProps {
 }
 
 export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = false }: CartPageProps) {
+  const router = useRouter();
   const [cart, setCart] = useState<Cart>({ items: [], total: 0, updated_at: '' });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [enrichedItems, setEnrichedItems] = useState<Map<string, { imageUrl: string; artistName: string; category?: string }>>(new Map());
 
   useEffect(() => {
     fetchCart();
@@ -61,7 +65,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       console.log('Fetching cart for user:', userId);
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/cart/${userId}`,
+        `http://localhost:5001/api/cart/${userId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -73,6 +77,9 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
         const data = await response.json();
         console.log('Cart fetched successfully:', data);
         setCart(data.cart);
+        
+        // Enrich cart items with asset data if needed
+        await enrichCartItems(data.cart.items);
       } else {
         console.error('Failed to fetch cart:', response.status, response.statusText);
         const errorText = await response.text();
@@ -92,16 +99,34 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
   const updateQuantity = async (artworkId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
-    setUpdating(true);
-    const updatedItems = cart.items.map(item =>
-      item.artwork_id === artworkId
-        ? { ...item, quantity: newQuantity }
-        : item
-    );
-    
-    const newTotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    setCart({ ...cart, items: updatedItems, total: newTotal });
-    setUpdating(false);
+    try {
+      setUpdating(true);
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch(
+        `http://localhost:5001/api/cart/${userId}/quantity`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ artworkId, quantity: newQuantity }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setCart(data.cart);
+        await enrichCartItems(data.cart.items);
+      } else {
+        console.error('Failed to update quantity');
+      }
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const removeItem = async (artworkId: string) => {
@@ -110,7 +135,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       const token = localStorage.getItem('access_token');
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/cart/${userId}/remove`,
+        `http://localhost:5001/api/cart/${userId}/remove`,
         {
           method: 'POST',
           headers: {
@@ -124,11 +149,25 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       if (response.ok) {
         const data = await response.json();
         setCart(data.cart);
+        await enrichCartItems(data.cart.items);
+        toast.success('Removed from Cart', {
+          description: 'The item has been removed from your cart.',
+          duration: 3000,
+          icon: '🗑️',
+        });
       } else {
         console.error('Failed to remove item from cart');
+        toast.error('Failed to Remove', {
+          description: 'Could not remove item from cart. Please try again.',
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error('Error removing item:', error);
+      toast.error('Error', {
+        description: 'An error occurred while removing the item. Please try again.',
+        duration: 4000,
+      });
     } finally {
       setUpdating(false);
     }
@@ -140,7 +179,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       const token = localStorage.getItem('access_token');
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/cart/${userId}/clear`,
+        `http://localhost:5001/api/cart/${userId}/clear`,
         {
           method: 'POST',
           headers: {
@@ -152,6 +191,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       if (response.ok) {
         const data = await response.json();
         setCart(data.cart);
+        setEnrichedItems(new Map());
       } else {
         console.error('Failed to clear cart');
       }
@@ -162,15 +202,76 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
     }
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(price);
+  const enrichCartItems = async (items: CartItem[]) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    const enriched = new Map<string, { imageUrl: string; artistName: string; category?: string }>();
+
+    for (const item of items) {
+      // Only fetch if image_url is missing or empty
+      if (!item.image_url || item.image_url.trim() === '') {
+        try {
+          const response = await fetch(
+            `http://localhost:5001/api/assets/${item.artwork_id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const asset = await response.json();
+            const imageUrl = asset.preview_images?.[0] || asset.avatar_url || '';
+            const artistName = asset.display_name || asset.username || item.artist_name || 'Unknown Artist';
+            const category = asset.category || 'Digital Art';
+            
+            enriched.set(item.artwork_id, { imageUrl, artistName, category });
+          }
+        } catch (error) {
+          console.error(`Error fetching asset ${item.artwork_id}:`, error);
+        }
+      } else {
+        // Use existing data
+        enriched.set(item.artwork_id, {
+          imageUrl: item.image_url,
+          artistName: item.artist_name || 'Unknown Artist',
+        });
+      }
+    }
+
+    setEnrichedItems(enriched);
   };
 
-  const handleProceedToCheckout = () => {
-    onProceedToCheckout(cart);
+  // Use INR formatting utility
+  const formatPrice = (price: number) => formatPriceINR(price, true);
+
+  const getItemImage = (item: CartItem): string => {
+    const enriched = enrichedItems.get(item.artwork_id);
+    return enriched?.imageUrl || item.image_url || 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop';
+  };
+
+  const getItemArtistName = (item: CartItem): string => {
+    const enriched = enrichedItems.get(item.artwork_id);
+    return enriched?.artistName || item.artist_name || 'Unknown Artist';
+  };
+
+  const getItemCategory = (item: CartItem): string => {
+    const enriched = enrichedItems.get(item.artwork_id);
+    // Only show category if it's meaningful (not file format like png, jpg)
+    const category = enriched?.category;
+    if (category && !['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(category.toLowerCase())) {
+      return category;
+    }
+    return null;
+  };
+
+  const handleAddAddress = () => {
+    // Store cart data in sessionStorage for address page
+    sessionStorage.setItem('cartData', JSON.stringify(cart));
+    sessionStorage.setItem('cartUserId', userId);
+    router.push('/dashboard/cart/address');
   };
 
   if (loading) {
@@ -205,7 +306,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Shopping Cart</h1>
+          <h1 className={`text-3xl font-bold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>Shopping Cart</h1>
           {cart.items.length > 0 && (
             <Button
               variant="outline"
@@ -219,11 +320,11 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
 
         {cart.items.length === 0 ? (
           /* Empty Cart State */
-          <Card className="text-center py-16">
+          <Card className={`text-center py-16 ${isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
             <CardContent>
-              <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Your cart is empty</h3>
-              <p className="text-gray-600 mb-6">Start exploring the marketplace to find amazing artworks</p>
+              <ShoppingCart className={`w-16 h-16 mx-auto mb-4 ${isDashboardDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
+              <h3 className={`text-xl font-semibold mb-2 ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>Your cart is empty</h3>
+              <p className={`mb-6 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Start exploring the marketplace to find amazing artworks</p>
               <Button>
                 Browse Marketplace
               </Button>
@@ -234,51 +335,44 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
               {cart.items.map((item) => (
-                <Card key={item.artwork_id}>
+                <Card key={item.artwork_id} className={isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : ''}>
                   <CardContent className="p-6">
                     <div className="flex items-center space-x-4">
-                      <div className="w-24 h-24 flex-shrink-0">
+                      <div className="w-24 h-24 flex-shrink-0 aspect-square overflow-hidden rounded-lg bg-gray-100">
                         <ImageWithFallback
-                          src={item.image_url}
+                          src={getItemImage(item)}
                           alt={item.title}
-                          className="w-full h-full object-cover rounded-lg"
+                          className="w-full h-full object-cover"
                         />
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 truncate">{item.title}</h3>
-                        <p className="text-sm text-gray-600 mb-2">by {item.artist_name}</p>
-                        <Badge variant="secondary" className="text-xs">
-                          {item.media_type.replace('_', ' ')}
-                        </Badge>
+                        <h3 className={`font-semibold truncate ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>{item.title}</h3>
+                        <p className={`text-sm mb-2 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          by {getItemArtistName(item)}
+                        </p>
+                        {getItemCategory(item) && (
+                          <Badge variant="secondary" className="text-xs">
+                            {getItemCategory(item)}
+                          </Badge>
+                        )}
                       </div>
                       
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.artwork_id, item.quantity - 1)}
-                            disabled={updating || item.quantity <= 1}
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.artwork_id, item.quantity + 1)}
-                            disabled={updating}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
+                        <div className="text-center">
+                          <div className={`text-sm font-medium ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>
+                            Quantity
+                          </div>
+                          <div className={`font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {item.quantity}
+                          </div>
                         </div>
                         
                         <div className="text-right">
-                          <div className="font-semibold text-gray-900">
+                          <div className={`font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
                             {formatPrice(item.price * item.quantity)}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className={`text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                             {formatPrice(item.price)} each
                           </div>
                         </div>
@@ -325,11 +419,11 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
                   
                   <Button 
                     className="w-full"
-                    onClick={handleProceedToCheckout}
-                    disabled={updating}
+                    onClick={handleAddAddress}
+                    disabled={updating || cart.items.length === 0}
                   >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Proceed to Checkout
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Add Address
                   </Button>
                   
                   <div className="text-xs text-gray-500 text-center">

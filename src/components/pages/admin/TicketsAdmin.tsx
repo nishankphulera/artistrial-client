@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -46,7 +48,7 @@ export const TicketsAdmin: React.FC<TicketsAdminProps> = ({
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchTicketListings } = useTicketData();
+  const { fetchTicketListings, fetchTicketStats } = useTicketData();
   const [events, setEvents] = useState<TicketListing[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,28 +87,36 @@ export const TicketsAdmin: React.FC<TicketsAdminProps> = ({
         sortBy: filters.sortBy,
       };
 
-      // Use the unified data service
-      const data = await fetchTicketListings(ticketFilters, {
-        context: 'admin',
-        userId: user?.id,
-        activeTab: activeTab,
-      });
+      // Fetch tickets and stats in parallel
+      const [ticketData, statsData] = await Promise.all([
+        fetchTicketListings(ticketFilters, {
+          context: 'admin',
+          userId: user?.id,
+          activeTab: activeTab,
+        }),
+        user?.id ? fetchTicketStats(user.id) : Promise.resolve(null)
+      ]);
 
-      setEvents(data);
+      setEvents(ticketData);
 
-      // Calculate admin stats from the loaded data
-      const myEvents = data.filter(event => event.isOwner).length;
+      // Calculate stats from the loaded ticket data
+      const myEvents = ticketData.filter(event => event.isOwner).length;
+      const totalTicketsSold = ticketData.reduce((sum, event) => sum + (event.sales || 0), 0);
+      const totalRevenue = ticketData
+        .filter(event => event.isOwner)
+        .reduce((sum, event) => sum + (event.earnings || 0), 0);
+      const averageAttendance = ticketData.length > 0 
+        ? Math.round(ticketData.reduce((sum, event) => sum + ((event.sales || 0) / Math.max(event.totalTickets, 1) * 100), 0) / ticketData.length)
+        : 0;
+      const upcomingEvents = ticketData.filter(event => new Date(event.eventDate) > new Date()).length;
+
       setAdminStats({
-        totalEvents: data.length,
+        totalEvents: ticketData.length,
         myEvents: myEvents,
-        totalTicketsSold: data.reduce((sum, event) => sum + (event.sales || 0), 0),
-        totalRevenue: data
-          .filter(event => event.isOwner)
-          .reduce((sum, event) => sum + (event.earnings || 0), 0),
-        averageAttendance: data.length > 0 
-          ? Math.round(data.reduce((sum, event) => sum + ((event.sales || 0) / event.totalTickets * 100), 0) / data.length)
-          : 0,
-        upcomingEvents: data.filter(event => new Date(event.eventDate) > new Date()).length,
+        totalTicketsSold: totalTicketsSold,
+        totalRevenue: totalRevenue,
+        averageAttendance: averageAttendance,
+        upcomingEvents: upcomingEvents,
       });
     } catch (error) {
       console.error('Error loading admin event data:', error);

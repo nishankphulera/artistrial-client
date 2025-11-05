@@ -132,6 +132,34 @@ const baseTalentData: TalentProfile[] = [
   },
 ];
 
+// Transform database talent data to TalentProfile format
+const transformDbTalentToProfile = (dbTalent: any): TalentProfile => {
+  return {
+    id: dbTalent.id.toString(),
+    name: dbTalent.display_name || dbTalent.username || 'Unknown User',
+    profession: dbTalent.title || 'Professional Service',
+    location: dbTalent.location || 'Location not specified',
+    rating: 4.5, // Default rating - can be calculated from reviews later
+    hourlyRate: parseFloat(dbTalent.hourly_rate) || 0,
+    skills: dbTalent.skills || [],
+    experience: dbTalent.experience || 'Experience not specified',
+    avatar: dbTalent.avatar_url || '',
+    availability: dbTalent.availability === 'full-time' ? 'Available' : 
+                  dbTalent.availability === 'part-time' ? 'Available' : 'Busy',
+    portfolio: dbTalent.portfolio_urls || [],
+    bio: dbTalent.description || '',
+    totalReviews: 0, // Default - can be calculated from reviews table later
+    totalProjects: 0, // Default - can be calculated from projects table later
+    responseTime: '< 1h', // Default response time
+    earnings: 0, // Default - can be calculated from earnings table later
+    status: dbTalent.status === 'active' ? 'active' : 
+            dbTalent.status === 'pending' ? 'pending' : 'paused',
+    featuredImage: dbTalent.portfolio_urls && dbTalent.portfolio_urls.length > 0 ? 
+                   dbTalent.portfolio_urls[0] : undefined,
+    userId: dbTalent.user_id?.toString(),
+  };
+};
+
 export const useTalentData = () => {
   const fetchTalentProfiles = async (
     filters: Partial<TalentFilters> = {},
@@ -156,19 +184,27 @@ export const useTalentData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/talent?${params}`,
+        `http://localhost:5001/api/talents/search?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.talents && data.talents.length > 0) {
-          return processFilteredData(data.talents, filters, context);
+        console.log('API Response:', data);
+        if (data && data.length > 0) {
+          // Transform database data to TalentProfile format
+          const transformedData = data.map((talent: any) => transformDbTalentToProfile(talent));
+          console.log('Transformed data:', transformedData);
+          return processFilteredData(transformedData, filters, context);
+        } else {
+          console.log('No talent data received from API');
         }
+      } else {
+        console.error('API response not ok:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error loading talents from API:', error);
@@ -274,8 +310,8 @@ export const useTalentData = () => {
       case 'experience':
         // Sort by experience years (extract number from experience string)
         processedData.sort((a, b) => {
-          const aYears = parseInt(a.experience.split(' ')[0]) || 0;
-          const bYears = parseInt(b.experience.split(' ')[0]) || 0;
+          const aYears = a.experience ? parseInt(a.experience.split(' ')[0]) || 0 : 0;
+          const bYears = b.experience ? parseInt(b.experience.split(' ')[0]) || 0 : 0;
           return bYears - aYears;
         });
         break;

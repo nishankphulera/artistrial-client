@@ -11,7 +11,9 @@ import { X, Plus, Package, Upload, DollarSign, FileImage } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
+import { createListingCreationEvent } from '@/utils/userEvents';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
 
 
 interface AssetFormData {
@@ -183,44 +185,78 @@ export const AssetListingForm: React.FC<AssetListingFormProps> = ({ onClose, isD
     
     try {
       const token = localStorage.getItem('access_token');
+      console.log("token in asset listing form", token);
       
-      // Create FormData for file uploads
-      const formDataToSend = new FormData();
+      // Upload preview images to S3 first
+      let previewImageUrls: string[] = [];
+      if (formData.previewImages.length > 0) {
+        try {
+          toast.info('Uploading images...');
+          previewImageUrls = await uploadMultipleImagesToS3(formData.previewImages, 'assets/previews');
+          toast.success(`Successfully uploaded ${previewImageUrls.length} image(s)`);
+        } catch (error) {
+          toast.error('Failed to upload preview images. Please try again.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
-      // Add text fields
-      const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'asset',
+      // Prepare asset data
+      const assetData = {
+        user_id: user.id,
+        title: formData.title,
+        category: formData.category,
+        description: formData.description,
         price: parseFloat(formData.price),
+        file_format: formData.fileFormat,
+        dimensions: formData.dimensions,
+        file_size: formData.fileSize,
+        resolution: formData.resolution,
+        software: formData.software,
+        style: formData.style,
+        tags: formData.tags,
+        color_scheme: formData.colorScheme,
+        license: formData.license,
+        is_commercial_use: formData.isCommercialUse,
+        is_editable_source: formData.isEditableSource,
+        has_variations: formData.hasVariations,
+        images: previewImageUrls, // Add uploaded image URLs
+        type: 'asset',
         status: 'active'
       };
 
-      // Remove file fields from listing data
-      const { previewImages, sourceFiles, ...textData } = listingData;
-      formDataToSend.append('data', JSON.stringify(textData));
-
-      // Add files
-      formData.previewImages.forEach(file => {
-        formDataToSend.append('previewImages', file);
-      });
-      
-      formData.sourceFiles.forEach(file => {
-        formDataToSend.append('sourceFiles', file);
-      });
-
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/asset`,
+        'http://localhost:5001/api/assets',
         {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: formDataToSend,
+          body: JSON.stringify(assetData),
         }
       );
 
       if (response.ok) {
+        const responseData = await response.json();
+        const assetId = responseData.data?.id || responseData.id;
+        
+        // Create user event for asset creation
+        if (assetId) {
+          await createListingCreationEvent(
+            user.id,
+            'asset',
+            assetId,
+            formData.title,
+            `Created asset listing: ${formData.title} in ${formData.category}`,
+            {
+              category: formData.category,
+              price: parseFloat(formData.price),
+              file_format: formData.fileFormat
+            }
+          );
+        }
+        
         toast.success('Asset listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
         if (onClose) onClose();

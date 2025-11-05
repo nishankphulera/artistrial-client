@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -46,7 +48,7 @@ export const LegalServicesAdmin: React.FC<LegalServicesAdminProps> = ({
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchLegalServices } = useLegalData();
+  const { fetchLegalServices, fetchLegalStats } = useLegalData();
   const [lawyers, setLawyers] = useState<LegalService[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,30 +87,38 @@ export const LegalServicesAdmin: React.FC<LegalServicesAdminProps> = ({
         sortBy: filters.sortBy,
       };
 
-      // Use the unified data service
-      const data = await fetchLegalServices(legalFilters, {
-        context: 'admin',
-        userId: user?.id,
-        activeTab: activeTab,
-      });
+      // Fetch legal services and stats in parallel
+      const [legalData, statsData] = await Promise.all([
+        fetchLegalServices(legalFilters, {
+          context: 'admin',
+          userId: user?.id,
+          activeTab: activeTab,
+        }),
+        user?.id ? fetchLegalStats(user.id) : Promise.resolve(null)
+      ]);
 
-      setLawyers(data);
+      setLawyers(legalData);
 
-      // Calculate admin stats from the loaded data
-      const myProfiles = data.filter(lawyer => lawyer.isOwner).length;
+      // Calculate stats from the loaded legal data
+      const myProfiles = legalData.filter(lawyer => lawyer.isOwner).length;
+      const totalConsultations = legalData.reduce((sum, lawyer) => sum + ((lawyer as any).totalConsultations || 0), 0);
+      const totalRevenue = legalData
+        .filter(lawyer => lawyer.isOwner)
+        .reduce((sum, lawyer) => sum + ((lawyer as any).totalEarnings || 0), 0);
+      const averageHourlyRate = legalData.length > 0
+        ? legalData.reduce((sum, lawyer) => sum + (lawyer.hourlyRate || 0), 0) / legalData.length
+        : 0;
+      const clientSatisfaction = legalData.length > 0
+        ? legalData.reduce((sum, lawyer) => sum + ((lawyer as any).clientSatisfaction || 0), 0) / legalData.length
+        : 0;
+
       setAdminStats({
-        totalLawyers: data.length,
+        totalLawyers: legalData.length,
         myProfile: myProfiles,
-        totalConsultations: data.reduce((sum, lawyer) => sum + ((lawyer as any).totalConsultations || 0), 0),
-        totalRevenue: data
-          .filter(lawyer => lawyer.isOwner)
-          .reduce((sum, lawyer) => sum + ((lawyer as any).totalEarnings || 0), 0),
-        averageHourlyRate: data.length > 0
-          ? data.reduce((sum, lawyer) => sum + (lawyer.hourlyRate || 0), 0) / data.length
-          : 0,
-        clientSatisfaction: data.length > 0
-          ? data.reduce((sum, lawyer) => sum + ((lawyer as any).clientSatisfaction || 0), 0) / data.length
-          : 0,
+        totalConsultations: totalConsultations,
+        totalRevenue: totalRevenue,
+        averageHourlyRate: averageHourlyRate,
+        clientSatisfaction: clientSatisfaction,
       });
     } catch (error) {
       console.error('Error loading admin legal data:', error);

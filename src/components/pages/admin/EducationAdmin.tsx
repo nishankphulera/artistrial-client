@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -317,13 +319,13 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
           {/* All Courses Tab */}
           {(activeTab === 'all-courses' || activeTab === 'online' || activeTab === 'in-person' || activeTab === 'active') && (
             <div className="space-y-6 mt-0">
-              {/* Course Grid */}
+              {/* Course Grid - Responsive and Scalable */}
               {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
                   {[...Array(6)].map((_, i) => (
-                    <Card key={i} className="overflow-hidden animate-pulse">
+                    <Card key={i} className="overflow-hidden animate-pulse h-full">
                       <div className="aspect-video bg-gray-200"></div>
-                      <CardContent className="p-4">
+                      <CardContent className="p-3 sm:p-4">
                         <div className="h-4 bg-gray-200 rounded mb-2"></div>
                         <div className="h-3 bg-gray-200 rounded mb-2"></div>
                         <div className="h-3 bg-gray-200 rounded mb-2"></div>
@@ -332,12 +334,12 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
                   {filteredCourses.map((course) => (
                     <Card 
                       key={course.id} 
-                      className={`overflow-hidden hover:shadow-lg transition-shadow cursor-pointer relative ${
-                        isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : ''
+                      className={`overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer relative h-full flex flex-col group hover:scale-105 ${
+                        isDashboardDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'hover:bg-gray-50'
                       }`}
                     >
                       {/* Admin Action Menu */}
@@ -370,29 +372,31 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
                       </div>
 
                       {/* Course Thumbnail */}
-                      <div className="aspect-video relative">
+                      <div className="aspect-video relative overflow-hidden">
                         <ImageWithFallback
                           src={course.thumbnail}
                           alt={course.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         />
                         <div className="absolute top-2 left-2">
-                          <Badge className={`${getLevelColor(course.level)} text-xs`}>
+                          <Badge className={`${getLevelColor(course.level)} text-xs px-2 py-1`}>
                             {course.level.charAt(0).toUpperCase() + course.level.slice(1)}
                           </Badge>
                         </div>
                         <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
                           {course.duration}
                         </div>
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
                       </div>
 
-                      <CardContent className="p-4">
+                      <CardContent className="p-3 sm:p-4 flex-1 flex flex-col">
                         <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                            <h3 className={`font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`font-semibold text-sm sm:text-base line-clamp-2 ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
                               {course.title}
                             </h3>
-                            <p className={`text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <p className={`text-xs sm:text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'} truncate`}>
                               by {course.instructor}
                             </p>
                           </div>
@@ -404,43 +408,43 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
                         </div>
 
                         {/* Course Details */}
-                        <div className="space-y-2 mb-3">
+                        <div className="space-y-2 mb-3 flex-1">
                           {/* Rating */}
                           <div className="flex items-center gap-2">
                             <div className="flex items-center">
-                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                              <span className="text-sm ml-1">{course.rating}</span>
+                              <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500 fill-current" />
+                              <span className="text-xs sm:text-sm ml-1">{course.rating}</span>
                             </div>
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs sm:text-sm text-muted-foreground">
                               ({course.totalReviews} reviews)
                             </span>
                           </div>
 
                           {/* Students and Capacity */}
-                          <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center justify-between text-xs sm:text-sm">
                             <div className="flex items-center">
-                              <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                              <span>{course.currentStudents}/{course.maxStudents} students</span>
+                              <Users className="h-3 w-3 sm:h-4 sm:w-4 mr-1 text-muted-foreground" />
+                              <span className="truncate">{course.currentStudents}/{course.maxStudents} students</span>
                             </div>
-                            <Badge className={getStatusColor(course.status)}>
+                            <Badge className={`${getStatusColor(course.status)} text-xs`}>
                               {course.status?.charAt(0).toUpperCase()}{course.status?.slice(1) || 'Active'}
                             </Badge>
                           </div>
 
                           {/* Format and Location */}
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="capitalize">{course.format}</span>
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                            <span className="capitalize truncate">{course.format}</span>
                             {course.location && (
                               <>
                                 <span>•</span>
-                                <span>{course.location}</span>
+                                <span className="truncate">{course.location}</span>
                               </>
                             )}
                           </div>
                         </div>
 
                         {/* Description */}
-                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-3">
                           {course.description}
                         </p>
 
@@ -449,14 +453,14 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
                           <div className="mb-3">
                             <p className="text-xs text-muted-foreground mb-1">Materials:</p>
                             <div className="flex flex-wrap gap-1">
-                              {course.materials.slice(0, 3).map((material, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">
+                              {course.materials.slice(0, 2).map((material, index) => (
+                                <Badge key={index} variant="outline" className="text-xs truncate max-w-[80px]">
                                   {material}
                                 </Badge>
                               ))}
-                              {course.materials.length > 3 && (
+                              {course.materials.length > 2 && (
                                 <Badge variant="outline" className="text-xs">
-                                  +{course.materials.length - 3} more
+                                  +{course.materials.length - 2}
                                 </Badge>
                               )}
                             </div>
@@ -464,28 +468,29 @@ export const EducationAdmin: React.FC<EducationAdminProps> = ({
                         )}
 
                         {/* Price and Action */}
-                        <div className="flex items-center justify-between pt-2">
-                          <div className="text-xl font-bold">
+                        <div className="flex items-center justify-between pt-2 mt-auto">
+                          <div className="text-lg sm:text-xl font-bold">
                             ${course.price}
-                            <span className="text-sm text-muted-foreground ml-1">{course.currency}</span>
+                            <span className="text-xs sm:text-sm text-muted-foreground ml-1">{course.currency}</span>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1 sm:gap-2">
                             <Button 
                               variant="outline"
                               size="sm"
                               onClick={() => router.push(`/courses/${course.id}`)}
+                              className="text-xs sm:text-sm px-2 sm:px-3"
                             >
-                              <Eye className="h-4 w-4 mr-2" />
-                              View
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">View</span>
                             </Button>
                             {course.isOwner && (
                               <Button 
                                 size="sm"
                                 onClick={() => handleEditCourse(course.id)}
-                                className="bg-orange-600 hover:bg-orange-700 text-white"
+                                className="bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm px-2 sm:px-3"
                               >
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
+                                <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                <span className="hidden sm:inline">Edit</span>
                               </Button>
                             )}
                           </div>

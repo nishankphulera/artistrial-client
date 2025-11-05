@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import ReactCrop, { Crop, PixelCrop, makeAspectCrop, centerCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import {
   Users,
   MessageCircle,
@@ -32,10 +34,16 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { toast } from 'sonner';
+import { uploadImageToS3 } from '@/utils/s3Upload';
 
 interface CommunityPost {
   id: string;
@@ -88,129 +96,167 @@ export default function CommunityPage() {
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [communityStats, setCommunityStats] = useState({
+    activeCreators: '50K+',
+    postsShared: '125K+',
+    collaborations: '15K+',
+    eventsHosted: '2.8K+'
+  });
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [postForm, setPostForm] = useState({
+    title: '',
+    content: '',
+    category: '',
+    featured_image: ''
+  });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showImageEditor, setShowImageEditor] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const postCategories = [
+    'Digital Art',
+    'Photography',
+    'Illustration',
+    'Design',
+    'Career Advice',
+    'Collaboration',
+    'Showcase',
+    'Tips & Tricks',
+    'Tutorial',
+    'General'
+  ];
 
   useEffect(() => {
     fetchCommunityData();
   }, []);
 
   const fetchCommunityData = async () => {
-    // Mock data for now
-    const mockPosts: CommunityPost[] = [
-      {
-        id: '1',
-        title: 'Tips for Creating Stunning Digital Art Compositions',
-        content: 'Just finished a new series exploring color harmony in digital landscapes. Here are 5 key techniques I\'ve learned that completely transformed my work...',
-        author: 'Sarah Chen',
-        author_avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b64c?w=100',
-        category: 'Digital Art',
-        likes: 127,
-        comments: 23,
-        views: 1250,
-        created_at: '2024-01-15T10:30:00Z',
-        featured_image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=600'
-      },
-      {
-        id: '2',
-        title: 'Building a Sustainable Creative Practice',
-        content: 'After 5 years of freelancing, I want to share what I\'ve learned about creating consistent income streams as an artist. The key is diversification...',
-        author: 'Marcus Rivera',
-        author_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-        category: 'Career Advice',
-        likes: 89,
-        comments: 31,
-        views: 890,
-        created_at: '2024-01-14T14:20:00Z'
-      },
-      {
-        id: '3',
-        title: 'Collaboration Success Story: From Idea to Gallery',
-        content: 'Want to share how an amazing collaboration through Artistrial led to my first gallery exhibition. It all started with a simple message...',
-        author: 'Emma Thompson',
-        author_avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-        category: 'Collaboration',
-        likes: 156,
-        comments: 42,
-        views: 2100,
-        created_at: '2024-01-13T09:15:00Z',
-        featured_image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=600'
+    try {
+      setLoading(true);
+      
+      // Fetch posts
+      const token = localStorage.getItem('access_token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
-    ];
-
-    const mockEvents: CommunityEvent[] = [
-      {
-        id: '1',
-        title: 'Digital Art Workshop: Advanced Techniques',
-        description: 'Join master digital artist Alex Rivera for an intensive workshop covering advanced composition and lighting techniques.',
-        date: '2024-02-15',
-        time: '2:00 PM EST',
-        location: 'Online via Zoom',
-        type: 'online',
-        attendees: 45,
-        max_attendees: 50,
-        image_url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600',
-        organizer: 'Alex Rivera'
-      },
-      {
-        id: '2',
-        title: 'Creative Networking Mixer - NYC',
-        description: 'Connect with fellow artists, photographers, and creative professionals in the heart of Manhattan.',
-        date: '2024-02-18',
-        time: '6:00 PM EST',
-        location: 'Gallery 23, Brooklyn, NY',
-        type: 'in-person',
-        attendees: 23,
-        max_attendees: 30,
-        image_url: 'https://images.unsplash.com/photo-1543269664-56d93c1b41a6?w=600',
-        organizer: 'Gallery 23'
+      
+      // Fetch community stats
+      try {
+        const statsResponse = await fetch('http://localhost:5001/api/community/posts/stats', { headers });
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          console.log('Stats data:', statsData);
+          if (statsData.success && statsData.data) {
+            const formatNumber = (num: number) => {
+              if (num >= 1000) {
+                const k = (num / 1000).toFixed(1);
+                return k.endsWith('.0') ? `${k.slice(0, -2)}K+` : `${k}K+`;
+              }
+              return `${num}+`;
+            };
+            setCommunityStats({
+              activeCreators: formatNumber(statsData?.data?.active_creators || 50000),
+              postsShared: formatNumber(statsData?.data?.posts_shared || 125000),
+              collaborations: formatNumber(statsData?.data?.collaborations),
+              eventsHosted: formatNumber(statsData?.data?.events_hosted)
+            });
+          }
+        }
+      } catch (statsError) {
+        console.error('Error fetching community stats:', statsError);  // Keep default values if stats API fails
       }
-    ];
-
-    const mockMembers: CommunityMember[] = [
-      {
-        id: '1',
-        name: 'Sarah Chen',
-        username: '@sarahchen',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b64c?w=100',
-        bio: 'Digital artist specializing in surreal landscapes and color theory. 5+ years experience.',
-        specialties: ['Digital Art', 'Color Theory', 'Landscape'],
-        reputation_score: 4.9,
-        posts_count: 127,
-        location: 'San Francisco, CA',
-        joined_date: '2023-03-15',
-        is_verified: true
-      },
-      {
-        id: '2',
-        name: 'Marcus Rivera',
-        username: '@marcusrivera',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-        bio: 'Photographer and visual storyteller. Love capturing authentic moments and emotions.',
-        specialties: ['Photography', 'Storytelling', 'Portraiture'],
-        reputation_score: 4.8,
-        posts_count: 89,
-        location: 'Los Angeles, CA',
-        joined_date: '2023-01-20',
-        is_verified: true
-      },
-      {
-        id: '3',
-        name: 'Emma Thompson',
-        username: '@emmathompson',
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-        bio: 'Multimedia artist exploring the intersection of technology and traditional art forms.',
-        specialties: ['Multimedia', 'Installation', 'Technology'],
-        reputation_score: 4.7,
-        posts_count: 156,
-        location: 'New York, NY',
-        joined_date: '2022-11-10',
-        is_verified: false
+      
+      // Fetch posts
+      const postsResponse = await fetch(
+        `http://localhost:5001/api/community/posts?limit=20&offset=0&status=published&sort=newest`,
+        { headers }
+      );
+      
+      if (postsResponse.ok) {
+        const postsData = await postsResponse.json();
+        const formattedPosts: CommunityPost[] = postsData.data?.map((post: any) => ({
+          id: post.id.toString(),
+          title: post.title,
+          content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
+          author: post.author || post.username || 'Unknown',
+          author_avatar: post.author_avatar || '',
+          category: post.category || 'General',
+          likes: post.likes_count || 0,
+          comments: post.comments_count || 0,
+          views: post.views_count || 0,
+          created_at: post.created_at,
+          featured_image: post.featured_image || undefined,
+          is_liked: post.is_liked || false
+        })) || [];
+        setPosts(formattedPosts);
+      } else {
+        console.error('Failed to fetch posts');
+        setPosts([]);
       }
-    ];
-
-    setPosts(mockPosts);
-    setEvents(mockEvents);
-    setMembers(mockMembers);
-    setLoading(false);
+      
+      // Fetch events
+      const eventsResponse = await fetch(
+        `http://localhost:5001/api/community/events?status=upcoming&limit=20&offset=0`,
+        { headers }
+      );
+      
+      if (eventsResponse.ok) {
+        const eventsData = await eventsResponse.json();
+        const formattedEvents: CommunityEvent[] = eventsData.data?.map((event: any) => ({
+          id: event.id.toString(),
+          title: event.title,
+          description: event.description.substring(0, 150) + (event.description.length > 150 ? '...' : ''),
+          date: event.event_date,
+          time: event.event_time || 'TBD',
+          location: event.location,
+          type: event.event_type as 'online' | 'in-person' | 'hybrid',
+          attendees: event.attendees_count || 0,
+          max_attendees: event.max_attendees || null,
+          image_url: event.image_url || '',
+          organizer: event.organizer || event.username || 'Unknown'
+        })) || [];
+        setEvents(formattedEvents);
+      } else {
+        console.error('Failed to fetch events');
+        setEvents([]);
+      }
+      
+      // For members, we can fetch from users API or use mock data for now
+      // This would require a separate endpoint to get community members
+      const mockMembers: CommunityMember[] = [
+        {
+          id: '1',
+          name: 'Sarah Chen',
+          username: '@sarahchen',
+          avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b64c?w=100',
+          bio: 'Digital artist specializing in surreal landscapes and color theory. 5+ years experience.',
+          specialties: ['Digital Art', 'Color Theory', 'Landscape'],
+          reputation_score: 4.9,
+          posts_count: 127,
+          location: 'San Francisco, CA',
+          joined_date: '2023-03-15',
+          is_verified: true
+        }
+      ];
+      setMembers(mockMembers);
+      
+    } catch (error) {
+      console.error('Error fetching community data:', error);
+      setPosts([]);
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const timeAgo = (dateString: string) => {
@@ -232,6 +278,208 @@ export default function CommunityPage() {
       month: 'short', 
       day: 'numeric' 
     });
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be less than 10MB');
+        return;
+      }
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+        setShowImageEditor(true);
+        // Reset crop when opening new image
+        setCrop(undefined);
+        setCompletedCrop(undefined);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    if (aspect) {
+      const { width, height } = e.currentTarget;
+      const initialCrop = centerCrop(
+        makeAspectCrop(
+          {
+            unit: '%',
+            width: 90,
+          },
+          aspect,
+          width,
+          height
+        ),
+        width,
+        height
+      );
+      setCrop(initialCrop);
+    } else {
+      // Auto-crop to fit image
+      const { width, height } = e.currentTarget;
+      setCrop({
+        unit: '%',
+        x: 5,
+        y: 5,
+        width: 90,
+        height: 90,
+      });
+    }
+  };
+
+  const getCroppedImg = useCallback(
+    (
+      image: HTMLImageElement,
+      pixelCrop: PixelCrop,
+      fileName: string
+    ): Promise<File> => {
+      const canvas = document.createElement('canvas');
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
+      const cropWidth = Math.round(pixelCrop.width * scaleX);
+      const cropHeight = Math.round(pixelCrop.height * scaleY);
+      
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error('No 2d context');
+      }
+
+      ctx.drawImage(
+        image,
+        Math.round(pixelCrop.x * scaleX),
+        Math.round(pixelCrop.y * scaleY),
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        cropWidth,
+        cropHeight
+      );
+
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Canvas is empty'));
+              return;
+            }
+            const file = new File([blob], fileName, { type: blob.type });
+            resolve(file);
+          },
+          selectedImage?.type || 'image/jpeg',
+          0.95
+        );
+      });
+    },
+    [selectedImage]
+  );
+
+  const handleCropComplete = async () => {
+    if (!imgRef.current || !completedCrop || !selectedImage) {
+      toast.error('Please select a crop area');
+      return;
+    }
+
+    try {
+      const croppedFile = await getCroppedImg(
+        imgRef.current,
+        completedCrop,
+        selectedImage.name
+      );
+      setSelectedImage(croppedFile);
+      setImagePreview(URL.createObjectURL(croppedFile));
+      setShowImageEditor(false);
+      toast.success('Image cropped successfully');
+    } catch (error) {
+      console.error('Error cropping image:', error);
+      toast.error('Failed to crop image');
+    }
+  };
+
+  const handleImageUpload = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      toast.info('Uploading image to S3...');
+      const imageUrl = await uploadImageToS3(file, 'community/posts');
+      toast.success('Image uploaded successfully!');
+      return imageUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image. Please try again.');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleCreatePost = async () => {
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
+    if (!postForm.title.trim() || !postForm.content.trim()) {
+      toast.error('Please fill in both title and content');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        toast.error('Please log in to create a post');
+        router.push('/auth');
+        return;
+      }
+
+      // Upload image first if selected
+      let imageUrl = postForm.featured_image;
+      if (selectedImage) {
+        const uploadedUrl = await handleImageUpload(selectedImage);
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
+      const response = await fetch('http://localhost:5001/api/community/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: postForm.title,
+          content: postForm.content,
+          category: postForm.category || null,
+          featured_image: imageUrl || null,
+          status: 'published'
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Post created successfully!');
+        setShowCreatePost(false);
+        setPostForm({ title: '', content: '', category: '', featured_image: '' });
+        setSelectedImage(null);
+        setImagePreview(null);
+        setShowImageEditor(false);
+        fetchCommunityData(); // Refresh the feed
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.message || 'Failed to create post');
+      }
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast.error('Failed to create post');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -277,6 +525,7 @@ export default function CommunityPage() {
               <Button 
                 size="lg" 
                 className="bg-white text-purple-600 hover:bg-gray-50 px-8 py-4 text-lg font-semibold"
+                onClick={() => setShowCreatePost(true)}
               >
                 <Plus className="mr-2 h-5 w-5" />
                 Create Your First Post
@@ -294,7 +543,8 @@ export default function CommunityPage() {
             <Button 
               size="lg" 
               variant="outline"
-              className="border-white text-white hover:bg-white hover:text-purple-600 px-8 py-4 text-lg font-semibold"
+              className="border-2 border-white !bg-transparent !text-white hover:!bg-white hover:!text-purple-600 px-8 py-4 text-lg font-semibold transition-all [&>svg]:text-white [&>svg]:hover:text-purple-600"
+              onClick={() => router.push('/marketplace/tickets')}
             >
               <Calendar className="mr-2 h-5 w-5" />
               Explore Events
@@ -304,19 +554,19 @@ export default function CommunityPage() {
           {/* Community Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">50K+</div>
+              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">{communityStats.activeCreators}</div>
               <p className="text-purple-200">Active Creators</p>
             </div>
             <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">125K+</div>
+              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">{communityStats.postsShared}</div>
               <p className="text-purple-200">Posts Shared</p>
             </div>
             <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">15K+</div>
+              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">{communityStats.collaborations}</div>
               <p className="text-purple-200">Collaborations</p>
             </div>
             <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">2.8K+</div>
+              <div className="text-4xl md:text-5xl font-bold text-white mb-2 font-title">{communityStats.eventsHosted}</div>
               <p className="text-purple-200">Events Hosted</p>
             </div>
           </div>
@@ -328,7 +578,8 @@ export default function CommunityPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              <TabsList className="grid w-full lg:w-auto grid-cols-4 lg:grid-cols-4 h-12">
+              {/* Tabs hidden per user request */}
+              <TabsList className="hidden">
                 <TabsTrigger value="feed" className="flex items-center gap-2 px-6">
                   <MessageCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Feed</span>
@@ -405,11 +656,40 @@ export default function CommunityPage() {
 
                           <div className="flex items-center justify-between pt-4 border-t">
                             <div className="flex items-center gap-6 text-sm text-gray-600">
-                              <button className="flex items-center gap-2 hover:text-red-600 transition-colors">
-                                <Heart className="h-4 w-4" />
+                              <button 
+                                className={`flex items-center gap-2 transition-colors ${(post as any).is_liked ? 'text-red-600' : 'hover:text-red-600'}`}
+                                onClick={async () => {
+                                  const token = localStorage.getItem('access_token');
+                                  if (!token) {
+                                    router.push('/auth');
+                                    return;
+                                  }
+                                  try {
+                                    const response = await fetch(
+                                      `http://localhost:5001/api/community/posts/${post.id}/like`,
+                                      {
+                                        method: 'POST',
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`,
+                                          'Content-Type': 'application/json',
+                                        },
+                                      }
+                                    );
+                                    if (response.ok) {
+                                      fetchCommunityData();
+                                    }
+                                  } catch (error) {
+                                    console.error('Error toggling like:', error);
+                                  }
+                                }}
+                              >
+                                <Heart className={`h-4 w-4 ${(post as any).is_liked ? 'fill-red-500 text-red-500' : ''}`} />
                                 {post.likes}
                               </button>
-                              <button className="flex items-center gap-2 hover:text-blue-600 transition-colors">
+                              <button 
+                                className="flex items-center gap-2 hover:text-blue-600 transition-colors"
+                                onClick={() => router.push(`/community/post/${post.id}`)}
+                              >
                                 <MessageCircle className="h-4 w-4" />
                                 {post.comments}
                               </button>
@@ -436,7 +716,16 @@ export default function CommunityPage() {
                       <h3 className="font-semibold font-title">Quick Actions</h3>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <Button className="w-full justify-start bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                      <Button 
+                        className="w-full justify-start bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                        onClick={() => {
+                          if (!user) {
+                            router.push('/auth');
+                          } else {
+                            setShowCreatePost(true);
+                          }
+                        }}
+                      >
                         <Plus className="mr-2 h-4 w-4" />
                         Create Post
                       </Button>
@@ -522,7 +811,39 @@ export default function CommunityPage() {
                             </div>
                           )}
                         </div>
-                        <Button size="sm">View Details</Button>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            const token = localStorage.getItem('access_token');
+                            if (!token) {
+                              router.push('/auth');
+                              return;
+                            }
+                            // Register for event
+                            fetch(`http://localhost:5001/api/community/events/${event.id}/register`, {
+                              method: 'POST',
+                              headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json',
+                              },
+                            })
+                            .then(res => res.json())
+                            .then(data => {
+                              if (data.success) {
+                                alert(`Registered for ${event.title}!`);
+                                fetchCommunityData();
+                              } else {
+                                alert(data.message || 'Failed to register');
+                              }
+                            })
+                            .catch(error => {
+                              console.error('Error registering for event:', error);
+                              alert('Failed to register for event');
+                            });
+                          }}
+                        >
+                          {event.attendees >= (event.max_attendees || Infinity) ? 'Full' : 'Register'}
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -566,6 +887,326 @@ export default function CommunityPage() {
           </Tabs>
         </div>
       </section>
+
+      {/* Create Post Dialog */}
+      <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+            <DialogTitle className="text-2xl font-bold">Create New Post</DialogTitle>
+            <DialogDescription>
+              Share your thoughts, showcase your work, or ask questions with the community.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4 px-6 flex-1 overflow-y-auto min-h-0">
+            <div className="space-y-2">
+              <Label htmlFor="post-title">Title *</Label>
+              <Input
+                id="post-title"
+                placeholder="Give your post a catchy title..."
+                value={postForm.title}
+                onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
+                maxLength={255}
+              />
+              <p className="text-xs text-gray-500">{postForm.title.length}/255 characters</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="post-category">Category (Optional)</Label>
+              <Select 
+                value={postForm.category || undefined} 
+                onValueChange={(value) => setPostForm({ ...postForm, category: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {postCategories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {postForm.category && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() => setPostForm({ ...postForm, category: '' })}
+                >
+                  Clear category
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="post-content">Content *</Label>
+              <Textarea
+                id="post-content"
+                placeholder="Write your post content here... Share your story, ask questions, or showcase your work!"
+                value={postForm.content}
+                onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
+                rows={8}
+                className="resize-none"
+              />
+              <p className="text-xs text-gray-500">{postForm.content.length} characters</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="post-image">Featured Image (Optional)</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors">
+                {!imagePreview ? (
+                  <>
+                    <Camera className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <Label htmlFor="post-image" className="cursor-pointer">
+                      <span className="text-purple-600 hover:text-purple-500 font-medium">Upload an image</span>
+                      <span className="text-gray-500"> or drag and drop</span>
+                    </Label>
+                    <Input
+                      id="post-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">PNG, JPG up to 10MB</p>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative rounded-lg overflow-hidden border-2 border-gray-200">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-64 object-contain bg-gray-50"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setImagePreview(null);
+                          setShowImageEditor(false);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const input = document.getElementById('post-image') as HTMLInputElement;
+                          input?.click();
+                        }}
+                      >
+                        Change Image
+                      </Button>
+                      {selectedImage && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowImageEditor(true)}
+                        >
+                          Edit Image
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {selectedImage?.name} ({(selectedImage?.size || 0) / 1024 / 1024}MB)
+                    </p>
+                  </div>
+                )}
+              </div>
+              {uploadingImage && (
+                <div className="text-sm text-blue-600 flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  Uploading image...
+                </div>
+              )}
+            </div>
+
+            {/* Image Editor Dialog */}
+            {showImageEditor && imagePreview && (
+              <Dialog open={showImageEditor} onOpenChange={setShowImageEditor}>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+                  <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+                    <DialogTitle>Edit Image</DialogTitle>
+                    <DialogDescription>
+                      Crop and adjust your image before uploading. Drag the corners to adjust the crop area.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 px-6 py-4 flex-1 overflow-y-auto min-h-0">
+                    {/* Aspect Ratio Options */}
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant={aspect === undefined ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAspect(undefined)}
+                      >
+                        Free Crop
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={aspect === 1 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAspect(1)}
+                      >
+                        1:1 (Square)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={aspect === 16 / 9 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAspect(16 / 9)}
+                      >
+                        16:9 (Landscape)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={aspect === 4 / 3 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAspect(4 / 3)}
+                      >
+                        4:3 (Classic)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={aspect === 3 / 4 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAspect(3 / 4)}
+                      >
+                        3:4 (Portrait)
+                      </Button>
+                    </div>
+
+                    {/* Crop Area */}
+                    <div className="relative bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: '400px', maxHeight: '600px' }}>
+                      <ReactCrop
+                        crop={crop}
+                        onChange={(_, percentCrop) => setCrop(percentCrop)}
+                        onComplete={(c) => setCompletedCrop(c)}
+                        aspect={aspect}
+                        minWidth={50}
+                        minHeight={50}
+                        className="max-w-full max-h-[600px]"
+                      >
+                        <img
+                          ref={imgRef}
+                          alt="Crop me"
+                          src={imagePreview}
+                          style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain' }}
+                          onLoad={onImageLoad}
+                        />
+                      </ReactCrop>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 justify-between items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          // Simple resize to 1200px max width
+                          const img = new Image();
+                          img.src = imagePreview;
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const maxWidth = 1200;
+                            
+                            if (width > maxWidth) {
+                              height = (height * maxWidth) / width;
+                              width = maxWidth;
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(img, 0, 0, width, height);
+                            
+                            canvas.toBlob((blob) => {
+                              if (blob) {
+                                const file = new File([blob], selectedImage?.name || 'image.jpg', { type: blob.type });
+                                setSelectedImage(file);
+                                setImagePreview(URL.createObjectURL(blob));
+                                setCrop(undefined);
+                                setCompletedCrop(undefined);
+                                toast.success('Image resized successfully');
+                              }
+                            }, selectedImage?.type || 'image/jpeg', 0.9);
+                          };
+                        }}
+                      >
+                        Resize (Max 1200px)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setCrop(undefined);
+                          setCompletedCrop(undefined);
+                          setAspect(undefined);
+                        }}
+                      >
+                        Reset Crop
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="px-6 pb-6 pt-4 flex-shrink-0 border-t flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowImageEditor(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleCropComplete}
+                      disabled={!completedCrop}
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                    >
+                      Apply Crop
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreatePost(false);
+                setPostForm({ title: '', content: '', category: '', featured_image: '' });
+                setSelectedImage(null);
+                setImagePreview(null);
+                setShowImageEditor(false);
+              }}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreatePost}
+              disabled={isSubmitting || !postForm.title.trim() || !postForm.content.trim()}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+            >
+              {isSubmitting ? 'Publishing...' : 'Publish Post'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -169,18 +169,18 @@ export const useStudioData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/studios?${params}`,
+        `http://localhost:5001/api/studios?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.studios && data.studios.length > 0) {
-          return processFilteredData(data.studios, filters, context);
+        if (data && data.length > 0) {
+          return processFilteredData(data, filters, context);
         }
       }
     } catch (error) {
@@ -193,13 +193,35 @@ export const useStudioData = () => {
   };
 
   const processFilteredData = (
-    data: Studio[],
+    data: any[],
     filters: Partial<StudioFilters>,
     context: StudioDataContext
   ): Studio[] => {
-    let processedData = data.map(studio => ({
-      ...studio,
-      isOwner: context.userId ? studio.userId === context.userId : false,
+    let processedData = data.map((studio: any) => ({
+      id: studio.id?.toString() || '',
+      name: studio.title || studio.name || '',
+      type: studio.studio_type || studio.type || '',
+      location: `${studio.city || ''}, ${studio.state || ''}`.replace(/^,\s*|,\s*$/g, '') || studio.location || '',
+      address: studio.address || '',
+      coordinates: studio.coordinates,
+      hourlyRate: studio.hourly_rate || studio.hourlyRate || 0,
+      dailyRate: studio.daily_rate || studio.dailyRate,
+      capacity: parseInt(studio.capacity) || 0,
+      equipment: Array.isArray(studio.equipment) ? studio.equipment : [],
+      features: Array.isArray(studio.amenities) ? studio.amenities : [],
+      amenities: Array.isArray(studio.amenities) ? studio.amenities : [],
+      images: Array.isArray(studio.images) ? studio.images : [],
+      availability: studio.status === 'active' ? 'Available' : 'Limited',
+      rating: studio.rating || 0,
+      total_reviews: studio.total_reviews || 0,
+      description: studio.description || '',
+      policies: Array.isArray(studio.rules) ? studio.rules : [],
+      owner_id: studio.owner_id?.toString(),
+      userId: studio.owner_id?.toString(),
+      isOwner: context.userId ? studio.owner_id?.toString() === context.userId : false,
+      status: studio.status || 'active',
+      earnings: studio.earnings || 0,
+      bookingsCount: studio.bookingsCount || 0,
     }));
 
     // Apply admin tab filtering first
@@ -302,8 +324,41 @@ export const useStudioData = () => {
     return processedData;
   };
 
+  const fetchStudioStats = async (userId: string): Promise<any> => {
+    try {
+      const response = await fetch(
+        `http://localhost:5001/api/studios/stats/${userId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+    } catch (error) {
+      console.error('Error loading studio stats from API:', error);
+    }
+
+    // Fallback to mock stats
+    return {
+      total_studios: 0,
+      active_studios: 0,
+      inactive_studios: 0,
+      average_hourly_rate: 0,
+      min_hourly_rate: 0,
+      max_hourly_rate: 0,
+      average_daily_rate: 0,
+      average_weekly_rate: 0
+    };
+  };
+
   return {
     fetchStudioProfiles,
+    fetchStudioStats,
   };
 };
 

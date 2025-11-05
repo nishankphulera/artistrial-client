@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -295,14 +297,15 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
 
             {/* Items Grid */}
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
                 {[...Array(8)].map((_, i) => (
-                  <Card key={i} className="overflow-hidden animate-pulse">
+                  <Card key={i} className="overflow-hidden animate-pulse h-full flex flex-col">
                     <div className="aspect-video bg-gray-200"></div>
-                    <CardContent className="p-4">
-                      <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded mb-2"></div>
+                    <CardContent className="p-3 sm:p-4 flex-1 flex flex-col">
+                      <div className="h-3 sm:h-4 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-2 sm:h-3 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-2 sm:h-3 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-4 sm:h-6 bg-gray-200 rounded mt-auto"></div>
                     </CardContent>
                   </Card>
                 ))}
@@ -323,12 +326,12 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
                 {items.map((item) => (
                   <Card 
                     key={item.id} 
-                    className={`overflow-hidden hover:shadow-lg transition-shadow cursor-pointer relative ${
-                      isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : ''
+                    className={`overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer relative h-full flex flex-col group hover:scale-105 ${
+                      isDashboardDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'hover:bg-gray-50'
                     }`}
                   >
                     {/* Admin Action Menu */}
@@ -352,11 +355,11 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
                       </DropdownMenu>
                     </div>
 
-                    <div className="relative overflow-hidden">
+                    <div className="aspect-video relative overflow-hidden">
                       <ImageWithFallback
                         src={item.images[0]}
                         alt={item.title}
-                        className="w-full h-48 object-cover"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                       <div className="absolute top-3 left-3 flex gap-2">
                         <Badge className={getTypeColor(item.type)}>
@@ -371,16 +374,16 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
                       </div>
                     </div>
 
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
-                        <h3 className="font-title text-lg line-clamp-2">{item.title}</h3>
+                    <CardContent className="p-3 sm:p-4 flex-1 flex flex-col">
+                      <div className="space-y-2 flex-1">
+                        <h3 className={`font-title text-sm sm:text-base line-clamp-2 ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>{item.title}</h3>
                         
                         <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
+                          <Avatar className="h-5 w-5 sm:h-6 sm:w-6">
                             <AvatarImage src={item.vendorAvatar} alt={item.vendor} />
-                            <AvatarFallback>{item.vendor.charAt(0)}</AvatarFallback>
+                            <AvatarFallback className="text-xs">{item.vendor.charAt(0)}</AvatarFallback>
                           </Avatar>
-                          <span className="text-sm text-muted-foreground">{item.vendor}</span>
+                          <span className={`text-xs sm:text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'} truncate`}>{item.vendor}</span>
                           {item.isOwner && (
                             <Badge variant="outline" className="text-xs">
                               Owner
@@ -388,13 +391,13 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
                           )}
                         </div>
 
-                        <p className="text-sm text-muted-foreground line-clamp-2">
+                        <p className={`text-xs sm:text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'} line-clamp-2`}>
                           {item.description}
                         </p>
 
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                           <div className="flex items-center">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
+                            <Star className="h-3 w-3 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400 mr-1" />
                             <span>{item.rating}</span>
                           </div>
                           <span>•</span>
@@ -404,28 +407,28 @@ export const ProductServicesAdmin: React.FC<ProductServicesAdminProps> = ({
                               <span>•</span>
                               <div className="flex items-center">
                                 <MapPin className="h-3 w-3 mr-1" />
-                                {item.location}
+                                <span className="truncate">{item.location}</span>
                               </div>
                             </>
                           )}
                         </div>
 
                         {item.deliveryTime && (
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Clock className="h-4 w-4 mr-1" />
-                            {item.deliveryTime}
+                          <div className={`flex items-center text-xs sm:text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                            <span className="truncate">{item.deliveryTime}</span>
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-2">
-                          <div className="text-xl font-bold">
+                        <div className="flex items-center justify-between pt-2 mt-auto">
+                          <div className={`text-lg sm:text-xl font-bold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
                             ${item.price}
-                            <span className="text-sm text-muted-foreground ml-1">{item.currency}</span>
+                            <span className="text-xs sm:text-sm text-muted-foreground ml-1">{item.currency}</span>
                           </div>
                           {item.isOwner && (
                             <div className="text-right">
-                              <div className="text-sm text-muted-foreground">Sales</div>
-                              <div className="font-semibold">{item.sales || 0}</div>
+                              <div className="text-xs sm:text-sm text-muted-foreground">Sales</div>
+                              <div className="font-semibold text-sm sm:text-base">{item.sales || 0}</div>
                             </div>
                           )}
                         </div>

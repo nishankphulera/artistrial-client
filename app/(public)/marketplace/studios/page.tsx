@@ -19,7 +19,6 @@ import { RatingSystem } from '@/components/shared/RatingSystem';
 import { UserProfileLink } from '@/components/shared/UserProfileLink';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
 
 interface StudiosPageProps {
   isDashboardDarkMode?: boolean;
@@ -145,21 +144,13 @@ export default function StudiosPage({ isDashboardDarkMode = false }: StudiosPage
 
   const loadReviews = async (studioId: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/reviews/studio/${studioId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setReviews(data.reviews);
-      }
+      // Try to fetch reviews from local server if endpoint exists
+      // For now, reviews are optional - can be added later
+      // TODO: Add studio reviews endpoint to server
+      setReviews([]);
     } catch (error) {
       console.error('Error loading reviews:', error);
+      setReviews([]);
     }
   };
 
@@ -177,24 +168,26 @@ export default function StudiosPage({ isDashboardDarkMode = false }: StudiosPage
     if (!selectedStudio || !user) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/studio-bookings`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            studio_id: selectedStudio.id,
-            user_id: user.id,
-            ...bookingForm
-          }),
-        }
-      );
-
-      if (response.ok) {
+      // Create user event for studio booking (this handles the booking internally)
+      const { createStudioBookingEvent } = await import('@/utils/userEvents');
+      if (bookingForm.selectedDate && selectedStudio.id) {
+        const studioId = typeof selectedStudio.id === 'string' ? parseInt(selectedStudio.id) : selectedStudio.id;
+        await createStudioBookingEvent(
+          user.id,
+          studioId,
+          selectedStudio.name,
+          bookingForm.selectedDate,
+          bookingForm.startTime,
+          bookingForm.endTime,
+          selectedStudio.location || selectedStudio.address,
+          {
+            event_type: bookingForm.eventType,
+            guest_count: bookingForm.guestCount,
+            additional_requests: bookingForm.additionalRequests,
+            budget: bookingForm.budget
+          }
+        );
+        
         alert('Booking request sent successfully!');
         setShowBookingDialog(false);
         setBookingForm({

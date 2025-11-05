@@ -13,7 +13,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
 import { ArtistProfilePage } from './ArtistProfilePage';
 
 interface ServiceModule {
@@ -32,8 +31,9 @@ interface ProfilePageProps {
 export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = false }) => {
   const { userId } = useParams();
   const { user } = useAuth();
-  const targetUserId = userId || user?.id;
-  const isOwnProfile = targetUserId === user?.id;
+  // Get user ID from params, then current user, then localStorage fallback
+  const targetUserId = userId || user?.id || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || 'null')?.id : null);
+  const isOwnProfile = targetUserId === user?.id || targetUserId === (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || 'null')?.id : null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
@@ -56,115 +56,161 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
       try {
         setLoading(true);
         
-        if (!targetUserId) {
+        // If no targetUserId, try to get it from localStorage or user context
+        let effectiveUserId = targetUserId;
+        if (!effectiveUserId && typeof window !== 'undefined') {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              effectiveUserId = parsedUser?.id;
+            } catch (e) {
+              console.error('Error parsing stored user:', e);
+            }
+          }
+        }
+        
+        if (!effectiveUserId) {
+          console.log('No user ID available, cannot fetch profile');
           setLoading(false);
           return;
         }
 
-        const token = localStorage.getItem('access_token') || publicAnonKey;
+        const token = localStorage.getItem('access_token');
         
-        // First try to get the profile from the backend
-        console.log('Fetching profile for user:', targetUserId);
+        // Fetch user profile from server API
+        console.log('Fetching profile for user:', effectiveUserId);
         console.log('Current user:', user?.id);
         console.log('Is own profile:', isOwnProfile);
         
-        let response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/profiles/${targetUserId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Fetch user profile from server
+        let userProfileResponse = await fetch(
+          `http://localhost:5001/api/users/${effectiveUserId}`,
+          { headers }
         );
 
-        console.log('Profile response status:', response.status);
+        console.log('Profile response status:', userProfileResponse.status);
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Profile data received:', data);
-          setProfileData(data.profile);
-          setListings(data.listings || {});
-          setReviews(safeArray(data.reviews));
-        } else if (response.status === 404) {
-          // Profile not found - try to find user data from artworks/listings
-          console.log('Profile not found (404), checking for user in artworks...');
-          const errorText = await response.text();
-          console.log('404 response text:', errorText);
+        if (userProfileResponse.ok) {
+          const userData = await userProfileResponse.json();
+          console.log('User data received:', userData);
           
-          // Fetch artworks to see if we can find user info
-          const artworksResponse = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/artworks`,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            }
+          // Fetch user's assets
+          const assetsResponse = await fetch(
+            `http://localhost:5001/api/assets/user/${effectiveUserId}`,
+            { headers }
           );
-
+          
+          // Fetch user's talents
+          const talentsResponse = await fetch(
+            `http://localhost:5001/api/talents/user/${effectiveUserId}`,
+            { headers }
+          );
+          
+          let assetsData = [];
+          let talentsData = [];
+          
+          if (assetsResponse.ok) {
+            const assetsResult = await assetsResponse.json();
+            assetsData = Array.isArray(assetsResult) ? assetsResult : [];
+          }
+          
+          if (talentsResponse.ok) {
+            const talentsResult = await talentsResponse.json();
+            talentsData = Array.isArray(talentsResult) ? talentsResult : [];
+          }
+          
+          // Format profile data to match expected structure
+          const formattedProfile = {
+            id: userData.id,
+            username: userData.username || userData.email?.split('@')[0] || 'user',
+            full_name: userData.display_name || userData.username || 'User',
+            bio: userData.bio || '',
+            avatar_url: userData.avatar_url || '',
+            website: '',
+            location: '',
+            phone: '',
+            email: userData.email || '',
+            followers_count: 0,
+            following_count: 0,
+            is_verified: userData.is_verified || false,
+            joined_date: userData.created_at || new Date().toISOString().split('T')[0],
+            overall_rating: 0,
+            total_reviews: 0,
+            total_listings: assetsData.length + talentsData.length,
+            response_rate: 100,
+            response_time: '< 2 hours',
+            specialties: [],
+            profile_type: userData.role || 'Artist'
+          };
+          
+          setProfileData(formattedProfile);
+          setListings({
+            artworks: assetsData,
+            talents: talentsData,
+            studios: [],
+            events: [],
+            investments: [],
+            legalServices: []
+          });
+          setReviews([]);
+        } else if (userProfileResponse.status === 404) {
+          // User not found - create default profile if it's own profile
+          console.log('User not found (404), creating default profile...');
+          
           let foundUserInfo = null;
-          let artworksData = null;
-          if (artworksResponse.ok) {
-            artworksData = await artworksResponse.json();
-            const userArtwork = safeArray(artworksData?.artworks).find(
-              (artwork: any) => artwork?.artist_id === targetUserId
-            );
+          
+          // If it's the current user's own profile, create default data
+          if (isOwnProfile) {
+            const storedUser = localStorage.getItem('user');
+            let currentUser = user;
             
-            if (userArtwork) {
+            if (!currentUser && storedUser) {
+              try {
+                currentUser = JSON.parse(storedUser);
+              } catch (e) {
+                console.error('Error parsing stored user:', e);
+              }
+            }
+            
+            if (currentUser) {
               foundUserInfo = {
-                id: userArtwork.artist_id,
-                username: userArtwork.artist_name?.toLowerCase().replace(/\s+/g, '') || 'user',
-                full_name: userArtwork.artist_name || 'Unknown User',
+                id: currentUser.id,
+                username: currentUser.username || currentUser.email?.split('@')[0] || 'user',
+                full_name: currentUser.display_name || currentUser.email?.split('@')[0] || 'User',
                 bio: '',
                 avatar_url: '',
                 website: '',
                 location: '',
                 phone: '',
-                email: '',
+                email: currentUser.email || '',
                 followers_count: 0,
                 following_count: 0,
                 is_verified: false,
                 joined_date: new Date().toISOString().split('T')[0],
                 overall_rating: 0,
                 total_reviews: 0,
-                total_listings: safeArrayLength(artworksData?.artworks?.filter((a: any) => a?.artist_id === targetUserId)),
+                total_listings: 0,
                 response_rate: 100,
                 response_time: '< 2 hours',
-                specialties: []
+                specialties: [],
+                profile_type: currentUser.role || 'Artist'
               };
             }
           }
 
-          // If it's the current user's own profile and no data found, create default
-          if (isOwnProfile && user && !foundUserInfo) {
-            foundUserInfo = {
-              id: user.id,
-              username: user.email?.split('@')[0] || 'user',
-              full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              bio: '',
-              avatar_url: user.user_metadata?.avatar_url || '',
-              website: '',
-              location: '',
-              phone: '',
-              email: user.email || '',
-              followers_count: 0,
-              following_count: 0,
-              is_verified: false,
-              joined_date: new Date().toISOString().split('T')[0],
-              overall_rating: 0,
-              total_reviews: 0,
-              total_listings: 0,
-              response_rate: 100,
-              response_time: '< 2 hours',
-              specialties: []
-            };
-          }
-
           if (foundUserInfo) {
             setProfileData(foundUserInfo);
-            // Set empty listings for now - could be enhanced to fetch actual user listings
             setListings({
-              artworks: artworksResponse.ok && artworksData?.artworks ? 
-                safeArray(artworksData.artworks).filter((artwork: any) => artwork?.artist_id === targetUserId) : [],
+              artworks: [],
               talents: [],
               studios: [],
               events: [],
@@ -177,8 +223,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
             setProfileData(null);
           }
         } else {
-          const errorText = await response.text();
-          console.error('Error response:', response.status, errorText);
+          const errorText = await userProfileResponse.text();
+          console.error('Error response:', userProfileResponse.status, errorText);
           setProfileData(null);
         }
       } catch (error) {
@@ -360,6 +406,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
   const serviceModules = generateServiceModules();
   const enabledServices = serviceModules.filter(service => service.enabled);
 
+  // Map service IDs to marketplace routes
+  const getServiceRoute = (serviceId: string): string => {
+    const routeMap: { [key: string]: string } = {
+      'artworks': '/dashboard/marketplace/assets',
+      'talents': '/dashboard/marketplace/talent',
+      'studios': '/dashboard/marketplace/studios',
+      'events': '/dashboard/marketplace/tickets',
+      'investments': '/dashboard/marketplace/investors',
+      'legalServices': '/dashboard/marketplace/legal'
+    };
+    return routeMap[serviceId] || '/dashboard/marketplace/assets';
+  };
+
   // If this is an Artist profile, use the specialized Artist profile layout
   if (profileData.profile_type === 'Artist' || (!profileData.profile_type && safeArrayLength(listings?.artworks) > 0)) {
     return <ArtistProfilePage isDashboardDarkMode={isDashboardDarkMode} />;
@@ -436,7 +495,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
                   
                   <div className="flex gap-2">
                     {isOwnProfile ? (
-                      <Link href="/profile-settings">
+                      <Link href="/dashboard/profile-settings">
                         <Button variant="outline" size="sm">
                           <Edit3 className="w-4 h-4 mr-2" />
                           Edit Profile
@@ -765,9 +824,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
                       }`}>
                         {safeArrayLength(service.portfolio)} items available
                       </div>
-                      <Button variant="outline" className="w-full">
-                        View Details
-                      </Button>
+                      <Link href={getServiceRoute(service.id)}>
+                        <Button variant="outline" className="w-full">
+                          View Details
+                        </Button>
+                      </Link>
                     </CardContent>
                   </Card>
                 ))}

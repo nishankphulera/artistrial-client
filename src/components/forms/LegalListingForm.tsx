@@ -9,9 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, Gavel, Scale, Clock, DollarSign, MapPin, Award } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { createListingCreationEvent } from '@/utils/userEvents';
 
 interface LegalFormData {
   title: string;
@@ -276,41 +276,111 @@ export const LegalListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast.error('Please log in to create a listing');
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
       const token = localStorage.getItem('access_token');
-      
-      const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'legal',
-        hourlyRate: parseFloat(formData.hourlyRate) || 0,
-        consultationFee: parseFloat(formData.consultationFee) || 0,
+      if (!token) {
+        toast.error('Please log in to create a listing');
+        return;
+      }
+
+      // Prepare legal service data for API
+      const legalServiceData = {
+        user_id: user.id,
+        title: formData.title,
+        service_type: formData.serviceType,
+        specializations: formData.specializations,
+        description: formData.description,
+        experience: formData.experience,
+        education: formData.education,
+        certifications: formData.certifications,
+        hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+        consultation_fee: formData.consultationFee ? parseFloat(formData.consultationFee) : null,
+        languages: formData.languages,
+        jurisdiction: formData.jurisdiction,
+        office_location: formData.officeLocation || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        country: formData.country || null,
+        availability: formData.availability,
+        response_time: formData.responseTime,
+        practice_areas: formData.practiceAreas,
+        client_types: formData.clientTypes,
+        case_types: formData.caseTypes,
+        is_bar_admitted: formData.isBarAdmitted,
+        bar_numbers: formData.barNumbers,
+        has_insurance: formData.hasInsurance,
+        insurance_amount: formData.insuranceAmount ? parseFloat(formData.insuranceAmount) : null,
+        accepts_legal_aid: formData.acceptsLegalAid,
+        offers_contingency: formData.offersContingency,
+        has_virtual_consultation: formData.hasVirtualConsultation,
+        offers_free_consultation: formData.offersFreeConsultation,
+        free_consultation_duration: formData.freeConsultationDuration || null,
+        minimum_case_value: formData.minimumCaseValue ? parseFloat(formData.minimumCaseValue) : null,
+        max_case_load: formData.maxCaseLoad ? parseInt(formData.maxCaseLoad) : null,
+        references_list: formData.references,
+        awards: formData.awards,
+        publications: formData.publications,
+        website: formData.website || null,
+        linkedin: formData.linkedIn || null,
+        bio: formData.bio,
         status: 'active'
       };
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/legal`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(listingData),
-        }
-      );
+      // Prepare flat rate services data
+      const flatRateServices = formData.flatRateFees.map(service => ({
+        service_name: service.serviceName,
+        description: service.description || null,
+        price: parseFloat(service.price),
+        timeline: service.timeline || null
+      }));
+
+      const response = await fetch('http://localhost:5001/api/legal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...legalServiceData,
+          flat_rate_services: flatRateServices
+        }),
+      });
 
       if (response.ok) {
+        const responseData = await response.json();
+        const legalServiceId = responseData.data?.id || responseData.id;
+        
+        // Create user event for legal service creation
+        if (legalServiceId) {
+          await createListingCreationEvent(
+            user.id,
+            'legal',
+            legalServiceId,
+            formData.title,
+            `Created legal service listing: ${formData.title}`,
+            {
+              service_type: formData.serviceType,
+              practice_areas: formData.practiceAreas,
+              hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+              city: formData.city,
+              state: formData.state
+            }
+          );
+        }
+        
         toast.success('Legal services listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
         if (onClose) onClose();
       } else {
         const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to create listing');
+        toast.error(errorData.message || 'Failed to create listing');
       }
     } catch (error) {
       console.error('Error creating legal listing:', error);

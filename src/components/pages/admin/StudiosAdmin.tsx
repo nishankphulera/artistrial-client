@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -47,7 +49,7 @@ export const StudiosAdmin: React.FC<StudiosAdminProps> = ({
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchStudioProfiles } = useStudioData();
+  const { fetchStudioProfiles, fetchStudioStats } = useStudioData();
   const [studios, setStudios] = useState<Studio[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,30 +88,38 @@ export const StudiosAdmin: React.FC<StudiosAdminProps> = ({
         sortBy: filters.sortBy,
       };
 
-      // Use the unified data service
-      const data = await fetchStudioProfiles(studioFilters, {
-        context: 'admin',
-        userId: user?.id,
-        activeTab: activeTab,
-      });
+      // Fetch studios and stats in parallel
+      const [studioData, statsData] = await Promise.all([
+        fetchStudioProfiles(studioFilters, {
+          context: 'admin',
+          userId: user?.id,
+          activeTab: activeTab,
+        }),
+        user?.id ? fetchStudioStats(user.id) : Promise.resolve(null)
+      ]);
 
-      setStudios(data);
+      setStudios(studioData);
 
-      // Calculate admin stats from the loaded data
-      const myListings = data.filter(studio => studio.isOwner).length;
+      // Calculate stats from the loaded studio data
+      const myListings = studioData.filter(studio => studio.isOwner).length;
+      const activeStudios = studioData.filter(studio => studio.status === 'active').length;
+      const totalEarnings = studioData
+        .filter(studio => studio.isOwner)
+        .reduce((sum, studio) => sum + (studio.earnings || 0), 0);
+      const averageRating = studioData.length > 0 
+        ? studioData.reduce((sum, studio) => sum + (studio.rating || 0), 0) / studioData.length 
+        : 0;
+      const occupancyRate = Math.round(
+        studioData.filter(studio => studio.availability !== 'Available').length / Math.max(studioData.length, 1) * 100
+      );
+
       setAdminStats({
-        totalStudios: data.length,
+        totalStudios: studioData.length,
         myListings: myListings,
-        totalBookings: data.reduce((sum, studio) => sum + (studio.bookingsCount || 0), 0),
-        totalEarnings: data
-          .filter(studio => studio.isOwner)
-          .reduce((sum, studio) => sum + (studio.earnings || 0), 0),
-        averageRating: data.length > 0 
-          ? data.reduce((sum, studio) => sum + (studio.rating || 0), 0) / data.length 
-          : 0,
-        occupancyRate: Math.round(
-          data.filter(studio => studio.availability !== 'Available').length / Math.max(data.length, 1) * 100
-        ),
+        totalBookings: studioData.reduce((sum, studio) => sum + (studio.bookingsCount || 0), 0),
+        totalEarnings: totalEarnings,
+        averageRating: averageRating,
+        occupancyRate: occupancyRate,
       });
     } catch (error) {
       console.error('Error loading admin studio data:', error);
@@ -123,7 +133,7 @@ export const StudiosAdmin: React.FC<StudiosAdminProps> = ({
   };
 
   const handleStudioClick = (studioId: string) => {
-    router.push(`/dashboard/studio/${studioId}`);
+    router.push(`/dashboard/marketplace/studios/${studioId}`);
   };
 
   const handleBookStudio = (studio: Studio) => {

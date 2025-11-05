@@ -13,6 +13,7 @@ import {
   Briefcase,
   Eye,
   Heart,
+  Ticket,
 } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import {
@@ -147,7 +148,7 @@ export function FilterSidebar({
       case "investors":
         return <DollarSign className="h-5 w-5" />;
       case "tickets":
-        return <Camera className="h-5 w-5" />;
+        return <Ticket className="h-5 w-5" />;
       case "legal":
         return <Briefcase className="h-5 w-5" />;
       default:

@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../../ui/card';
@@ -58,7 +60,7 @@ export const InvestorsAdmin: React.FC<InvestorsAdminProps> = ({
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchInvestorProfiles } = useInvestorData();
+  const { fetchInvestorProfiles, fetchInvestorStats } = useInvestorData();
   const [investors, setInvestors] = useState<InvestorProfile[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,28 +103,36 @@ export const InvestorsAdmin: React.FC<InvestorsAdminProps> = ({
         sortBy: filters.sortBy,
       };
 
-      // Use the unified data service
-      const data = await fetchInvestorProfiles(investorFilters, {
-        context: 'admin',
-        userId: user?.id,
-        activeTab: activeTab,
-      });
+      // Fetch investors and stats in parallel
+      const [investorData, statsData] = await Promise.all([
+        fetchInvestorProfiles(investorFilters, {
+          context: 'admin',
+          userId: user?.id,
+          activeTab: activeTab,
+        }),
+        user?.id ? fetchInvestorStats(user.id) : Promise.resolve(null)
+      ]);
 
-      setInvestors(data);
+      setInvestors(investorData);
 
-      // Calculate admin stats from the loaded data
-      const myProfiles = data.filter(investor => investor.isOwner).length;
+      // Calculate stats from the loaded investor data
+      const myProfiles = investorData.filter(investor => investor.isOwner).length;
+      const totalConnections = investorData.reduce((sum, investor) => sum + (investor.totalInvestments || 0), 0);
+      const dealsMade = investorData.reduce((sum, investor) => sum + (investor.successfulExits || 0), 0);
+      const averageInvestment = investorData.length > 0
+        ? investorData.reduce((sum, investor) => sum + (investor.minimumInvestment || 0), 0) / investorData.length
+        : 0;
+      const successRate = investorData.length > 0
+        ? (dealsMade / Math.max(totalConnections, 1)) * 100
+        : 0;
+
       setAdminStats({
-        totalInvestors: data.length,
+        totalInvestors: investorData.length,
         myProfile: myProfiles,
-        totalConnections: data.reduce((sum, investor) => sum + (investor.totalInvestments || 0), 0),
-        dealsMade: data.reduce((sum, investor) => sum + (investor.successfulExits || 0), 0),
-        averageInvestment: data.length > 0
-          ? data.reduce((sum, investor) => sum + (investor.minimumInvestment || 0), 0) / data.length
-          : 0,
-        successRate: data.length > 0
-          ? (data.reduce((sum, investor) => sum + (investor.successfulExits || 0), 0) / data.reduce((sum, investor) => sum + (investor.totalInvestments || 1), 0)) * 100
-          : 0,
+        totalConnections: totalConnections,
+        dealsMade: dealsMade,
+        averageInvestment: averageInvestment,
+        successRate: successRate,
       });
     } catch (error) {
       console.error('Error loading admin investor data:', error);

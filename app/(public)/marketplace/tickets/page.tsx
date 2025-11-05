@@ -17,7 +17,6 @@ import { TicketCard } from '@/components/shared/TicketCard';
 import { UserProfileLink } from '@/components/shared/UserProfileLink';
 import { SearchFilters, FilterConfig, FilterState } from '@/components/shared/SearchFilters';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import {
   useTicketData,
@@ -220,23 +219,65 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
       setLoading(true);
       const params = new URLSearchParams();
       if (filters.searchTerm) params.append('q', filters.searchTerm);
-      if (filters.category !== 'all') params.append('type', filters.category as string);
+      if (filters.category !== 'all') params.append('category', filters.category as string);
       if (filters.location !== 'all') params.append('location', filters.location);
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/events?${params}`,
+        `http://localhost:5001/api/tickets?${params}`,
         {
           headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.events.length > 0) {
-          setEvents(data.events);
+        // Handle both array response and object with data property
+        const tickets = Array.isArray(data) ? data : (data.data || data.tickets || []);
+        
+        if (tickets && tickets.length > 0) {
+          // Map tickets to events format
+          const mappedEvents: Event[] = tickets.map((ticket: any) => ({
+            id: ticket.id?.toString() || ticket.id,
+            title: ticket.title || '',
+            type: (ticket.event_type || 'Workshop') as Event['type'],
+            date: ticket.event_date || '',
+            time: ticket.event_time || '',
+            venue: ticket.venue || '',
+            location: ticket.address ? `${ticket.address}, ${ticket.city || ''}, ${ticket.state || ''}`.trim() : (ticket.city || ticket.location || ''),
+            price: ticket.ticket_types && Array.isArray(ticket.ticket_types) && ticket.ticket_types.length > 0
+              ? parseFloat(ticket.ticket_types[0].price || 0)
+              : parseFloat(ticket.price || 0),
+            capacity: ticket.total_capacity || 0,
+            tickets_sold: ticket.sales_count || 0,
+            description: ticket.description || ticket.short_description || '',
+            images: Array.isArray(ticket.images) && ticket.images.length > 0 
+              ? ticket.images 
+              : ticket.image_url 
+                ? [ticket.image_url]
+                : ['/api/placeholder/400/250'],
+            organizer_name: ticket.display_name || ticket.username || ticket.organizer || 'Unknown',
+            organizer_id: ticket.user_id?.toString() || ticket.user_id || '',
+            rating: ticket.rating,
+            tags: Array.isArray(ticket.tags) ? ticket.tags : (ticket.category ? (Array.isArray(ticket.category) ? ticket.category : [ticket.category]) : []),
+            featured: ticket.featured || false,
+            ticket_tiers: ticket.ticket_types ? ticket.ticket_types.map((tier: any) => ({
+              id: tier.id || tier.name,
+              name: tier.name || 'General Admission',
+              price: parseFloat(tier.price || 0),
+              description: tier.description || '',
+              quantity: tier.quantity || 0,
+              sold: tier.sold || 0,
+              benefits: Array.isArray(tier.features) ? tier.features : []
+            })) : [],
+            requirements: ticket.additional_info ? [ticket.additional_info] : [],
+            cancellation_policy: ticket.refund_policy || '',
+            age_restriction: ticket.age_restriction || '',
+            duration: ticket.duration || '',
+          }));
+          setEvents(mappedEvents);
         }
       }
     } catch (error) {
@@ -257,7 +298,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/purchase-ticket`,
+        `http://localhost:5001/api/tickets/purchase`,
         {
           method: 'POST',
           headers: {
@@ -265,7 +306,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            event_id: selectedEvent.id,
+            ticket_id: selectedEvent.id,
             user_id: user.id,
             tier_id: selectedTier,
             quantity: ticketQuantity
@@ -345,7 +386,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
             <Card key={event.id} className="hover:shadow-lg transition-shadow">
               <CardHeader className="p-0 relative">
                 <ImageWithFallback
-                  src={event.images[0]}
+                  src={event.images && event.images.length > 0 ? event.images[0] : '/api/placeholder/400/250'}
                   alt={event.title}
                   width={400}
                   height={250}
@@ -449,7 +490,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
               <div className="py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <ImageWithFallback
-                    src={selectedEvent.images[0]}
+                    src={selectedEvent.images && selectedEvent.images.length > 0 ? selectedEvent.images[0] : '/api/placeholder/400/250'}
                     alt={selectedEvent.title}
                     width={400}
                     height={250}

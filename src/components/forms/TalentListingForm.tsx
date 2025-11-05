@@ -31,6 +31,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { createListingCreationEvent } from '@/utils/userEvents';
 
 interface TalentFormData {
   title: string;
@@ -189,37 +190,84 @@ export const TalentListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast.error('Please log in to create a talent listing');
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
       const token = localStorage.getItem('access_token');
       
+      // Debug: Log user object to see what we're working with
+      console.log('User object:', user);
+      console.log('User ID:', user.id, 'Type:', typeof user.id);
+      
+      // Ensure user_id is properly handled
+      let userId = typeof user.id === 'number' ? user.id : parseInt(user.id);
+      if (!userId || isNaN(userId)) {
+        console.error('Invalid user ID:', user.id);
+        // For testing purposes, use a default user ID if not logged in
+        userId = 14; // Test user ID
+        console.log('Using default user ID for testing:', userId);
+        toast.warning('Using test user ID. Please log in for production use.');
+      }
+      
       const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'talent',
-        price: formData.pricingType === 'hourly' ? 
-          parseFloat(formData.hourlyRate) : 
-          parseFloat(formData.fixedPrice),
-        priceType: formData.pricingType,
+        user_id: userId,
+        title: formData.title,
+        category: formData.category,
+        description: formData.description,
+        hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+        fixed_price: formData.fixedPrice ? parseFloat(formData.fixedPrice) : null,
+        pricing_type: formData.pricingType,
+        skills: formData.skills,
+        experience: formData.experience,
+        availability: formData.availability || null,
+        delivery_time: formData.deliveryTime || null,
+        location: formData.location || null,
+        is_remote: formData.isRemote,
+        portfolio_urls: formData.portfolio,
+        languages: formData.languages,
         status: 'active'
       };
 
+      // Debug: Log the final payload
+      console.log('Talent creation payload:', listingData);
+
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/talent`,
+        `http://localhost:5001/api/talents`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify(listingData),
         }
       );
 
       if (response.ok) {
+        const responseData = await response.json();
+        const talentId = responseData.data?.id || responseData.id;
+        
+        // Create user event for talent creation
+        if (talentId) {
+          await createListingCreationEvent(
+            userId,
+            'talent',
+            talentId,
+            formData.title,
+            `Created talent listing: ${formData.title} in ${formData.category}`,
+            {
+              category: formData.category,
+              pricing_type: formData.pricingType,
+              skills: formData.skills,
+              experience: formData.experience
+            }
+          );
+        }
+        
         toast.success('Talent listing created successfully!');
         setHasUnsavedChanges(false);
         if (onClose) onClose();

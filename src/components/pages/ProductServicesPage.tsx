@@ -74,32 +74,22 @@ const sampleProducts: ProductService[] = [
     }
   ];
 
-const useProductData = () => ({
-  fetchProductServices: async (filters: ProductFilters, context: any) => {
-    console.log("Fetching products with filters:", filters, "and context:", context);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return sampleProducts.filter(p => {
-        let match = true;
-        if (filters.searchTerm && !p.title.toLowerCase().includes(filters.searchTerm.toLowerCase())) {
-            match = false;
-        }
-        if (filters.type !== 'all' && p.type !== filters.type) {
-            match = false;
-        }
-        return match;
-    });
-  }
-});
+// We'll fetch directly from API in the component
 
 const productFilterConfig: FilterConfig = {
     categories: [
         { value: 'design', label: 'Design', icon: null },
         { value: 'development', label: 'Development', icon: null },
         { value: 'writing', label: 'Writing', icon: null },
+        { value: 'marketing', label: 'Marketing', icon: null },
+        { value: 'photography', label: 'Photography', icon: null },
+        { value: 'video', label: 'Video', icon: null },
     ],
     locations: [
+        { value: 'all', label: 'All Locations' },
         { value: 'new-york', label: 'New York' },
         { value: 'los-angeles', label: 'Los Angeles' },
+        { value: 'chicago', label: 'Chicago' },
         { value: 'remote', label: 'Remote' },
     ],
     priceRange: { min: 0, max: 1000 },
@@ -107,12 +97,13 @@ const productFilterConfig: FilterConfig = {
     rating: true,
     customFilters: [
         { name: 'deliveryTime', type: 'select', options: [
+            { value: 'all', label: 'All' },
             { value: '1-day', label: '1 Day' },
             { value: '3-days', label: '3 Days' },
             { value: '1-week', label: '1 Week' },
         ]}
     ],
-    moduleType: 'assets', // Changed from 'products' to a valid type
+    moduleType: 'assets',
 };
 
 
@@ -145,9 +136,8 @@ interface ProductServicesPageProps {
 export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServicesPageProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchProductServices } = useProductData();
   const [products, setProducts] = useState<ProductService[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductService | null>(null);
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
@@ -158,7 +148,7 @@ export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServ
     category: [],
     subcategory: [],
     location: 'all',
-    priceRange: [0, 500],
+    priceRange: [0, 1000],
     availability: 'all',
     minRating: 0,
     sortBy: 'newest',
@@ -180,15 +170,161 @@ export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServ
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const data = await fetchProductServices(filters, { 
-        context: 'public',
-        userId: user?.id 
-      });
-      setProducts(data);
+      
+      // Build query parameters from filters
+      const params = new URLSearchParams();
+      
+      // Use search endpoint if there's a search term
+      const endpoint = filters.searchTerm 
+        ? 'http://localhost:5001/api/product-services/search'
+        : 'http://localhost:5001/api/product-services';
+      
+      if (filters.searchTerm) params.append('q', filters.searchTerm);
+      if (Array.isArray(filters.category) && filters.category.length > 0) {
+        // Use first category for now (API supports single category)
+        params.append('category', filters.category[0]);
+      }
+      if (filters.location && filters.location !== 'all') {
+        params.append('location', filters.location);
+      }
+      if (filters.type && filters.type !== 'all') {
+        // Map type to format: 'product' -> 'physical' or 'digital', 'service' -> 'service'
+        const format = filters.type === 'service' ? 'service' : (filters.type === 'product' ? 'digital' : filters.type);
+        params.append('format', format);
+      }
+      if (filters.priceRange) {
+        params.append('min_price', filters.priceRange[0].toString());
+        params.append('max_price', filters.priceRange[1].toString());
+      }
+      if (filters.sortBy) params.append('sort', filters.sortBy);
+      params.append('status', 'active');
+      params.append('limit', '50');
+
+      const response = await fetch(`${endpoint}?${params}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Ensure products is always an array
+        let productsArray = Array.isArray(data) ? data : (data.products || data.data || []);
+        
+        // Normalize API data to match ProductService interface
+        productsArray = productsArray.map((product: any) => ({
+          ...product,
+          vendor: product.vendor || product.display_name || product.username || 'Vendor',
+          vendorAvatar: product.vendorAvatar || product.avatar_url,
+          price: typeof product.price === 'string' ? parseFloat(product.price) : (product.price || 0),
+          rating: product.rating || 0,
+          totalReviews: product.totalReviews || product.total_reviews || 0,
+          images: product.images || [],
+          availability: product.availability || product.status || 'Available',
+        }));
+        
+        // Apply additional client-side filtering for categories, subcategories, etc.
+        let filteredProducts = applyClientSideFilters(productsArray, filters);
+        
+        // Apply sorting
+        filteredProducts = applySorting(filteredProducts, filters.sortBy);
+        
+        setProducts(filteredProducts);
+      } else {
+        console.error('Failed to fetch products');
+        // Fallback to sample data if API fails
+        setProducts(sampleProducts);
+      }
     } catch (error) {
       console.error('Error loading products:', error);
+      // Fallback to sample data if API fails
+      setProducts(sampleProducts);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Apply additional client-side filtering
+  const applyClientSideFilters = (products: ProductService[], filters: ProductFilters): ProductService[] => {
+    return products.filter((product) => {
+      // Search term filter
+      if (filters.searchTerm) {
+        const searchLower = filters.searchTerm.toLowerCase();
+        const matchesSearch = 
+          product.title?.toLowerCase().includes(searchLower) ||
+          product.description?.toLowerCase().includes(searchLower) ||
+          product.vendor?.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+
+      // Category filter (if not already filtered by API)
+      if (Array.isArray(filters.category) && filters.category.length > 0) {
+        // Check if product has a category field and matches
+        const productCategory = (product as any).category?.toLowerCase();
+        if (productCategory) {
+          const matchesCategory = filters.category.some(cat => 
+            productCategory.includes(cat.toLowerCase())
+          );
+          if (!matchesCategory) return false;
+        }
+      }
+
+      // Location filter (already handled by API, but double-check)
+      if (filters.location && filters.location !== 'all') {
+        if (!product.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Price range filter (already handled by API, but double-check)
+      if (filters.priceRange) {
+        const price = product.price || 0;
+        if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
+          return false;
+        }
+      }
+
+      // Availability filter
+      if (filters.availability && filters.availability !== 'all') {
+        const productAvailability = (product.availability || '').toLowerCase();
+        if (productAvailability !== filters.availability.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Type filter (already handled by API via format)
+      if (filters.type && filters.type !== 'all') {
+        if (product.type !== filters.type) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
+  // Apply sorting to filtered products
+  const applySorting = (products: ProductService[], sortBy: string): ProductService[] => {
+    const sorted = [...products];
+    
+    switch (sortBy) {
+      case 'oldest':
+        return sorted.sort((a, b) => {
+          const dateA = new Date((a as any).created_at || 0).getTime();
+          const dateB = new Date((b as any).created_at || 0).getTime();
+          return dateA - dateB;
+        });
+      case 'price_low':
+        return sorted.sort((a, b) => (a.price || 0) - (b.price || 0));
+      case 'price_high':
+        return sorted.sort((a, b) => (b.price || 0) - (a.price || 0));
+      case 'rating':
+        return sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      case 'popular':
+        return sorted.sort((a, b) => (b.totalReviews || 0) - (a.totalReviews || 0));
+      case 'newest':
+      default:
+        return sorted.sort((a, b) => {
+          const dateA = new Date((a as any).created_at || 0).getTime();
+          const dateB = new Date((b as any).created_at || 0).getTime();
+          return dateB - dateA;
+        });
     }
   };
 
@@ -430,10 +566,10 @@ export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServ
                     <div className="flex items-center gap-2 mb-3">
                       <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/profile/${product.userId}`) }} className="flex items-center gap-2 cursor-pointer hover:text-orange-600 transition-colors">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={product.vendorAvatar} alt={product.vendor} />
-                          <AvatarFallback>{product.vendor.charAt(0)}</AvatarFallback>
+                          <AvatarImage src={product.vendorAvatar || (product as any).avatar_url} alt={product.vendor || (product as any).display_name || 'Vendor'} />
+                          <AvatarFallback>{(product.vendor || (product as any).display_name || (product as any).username || 'V')?.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-muted-foreground">{product.vendor}</span>
+                        <span className="text-sm text-muted-foreground">{product.vendor || (product as any).display_name || (product as any).username || 'Vendor'}</span>
                       </div>
                     </div>
 

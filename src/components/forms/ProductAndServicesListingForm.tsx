@@ -199,7 +199,7 @@ export function ProductAndServicesListingForm({
             on_site_available: false,
           });
           setListingType("");
-        }, 3000);
+        }, 3001);
       } else {
         const errorData = await response.json();
         alert(`Error: ${errorData.error || "Failed to create listing"}`);

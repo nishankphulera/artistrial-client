@@ -9,9 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, Ticket, Calendar, MapPin, Clock, DollarSign, Users, Image } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
 
 interface TicketFormData {
   title: string;
@@ -241,43 +241,93 @@ export const TicketListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast.error('Please log in to create a listing');
+      return;
+    }
     
     setIsSubmitting(true);
     
     try {
-      const token = localStorage.getItem('access_token');
+      // Upload images to S3 first
+      let imageUrls: string[] = [];
+      if (formData.images.length > 0) {
+        try {
+          toast.info('Uploading images...');
+          imageUrls = await uploadMultipleImagesToS3(formData.images, 'tickets');
+          toast.success(`Successfully uploaded ${imageUrls.length} image(s)`);
+        } catch (error) {
+          toast.error('Failed to upload images. Please try again.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
-      // Create FormData for file uploads
-      const formDataToSend = new FormData();
-      
-      // Add text fields
-      const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'ticket',
+      // Prepare ticket data for API
+      const ticketData = {
+        user_id: user.id,
+        title: formData.title,
+        event_type: formData.eventType,
+        description: formData.description,
+        short_description: formData.shortDescription,
+        event_date: formData.eventDate,
+        event_time: formData.eventTime,
+        end_date: formData.endDate || null,
+        end_time: formData.endTime || null,
+        venue: formData.venue || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        country: formData.country || null,
+        is_online: formData.isOnline,
+        online_link: formData.onlineLink || null,
+        total_capacity: formData.totalCapacity ? parseInt(formData.totalCapacity) : null,
+        age_restriction: formData.ageRestriction || null,
+        category: formData.category,
+        tags: formData.tags,
+        organizer: formData.organizer,
+        contact_email: formData.contactEmail,
+        contact_phone: formData.contactPhone || null,
+        website: formData.website || null,
+        social_links: formData.socialLinks,
+        images: imageUrls, // Add uploaded image URLs
+        requires_approval: formData.requiresApproval,
+        is_refundable: formData.isRefundable,
+        allows_transfers: formData.allowsTransfers,
+        has_accessibility: formData.hasAccessibility,
+        has_parking: formData.hasParking,
+        has_food: formData.hasFood,
+        dresscode: formData.dresscode || null,
+        additional_info: formData.additionalInfo || null,
         status: 'active'
       };
 
-      // Remove images field from listing data
-      const { images, ...textData } = listingData;
-      formDataToSend.append('data', JSON.stringify(textData));
+      // Prepare ticket types data
+      const ticketTypes = formData.ticketTypes.map(type => ({
+        name: type.name,
+        price: parseFloat(type.price),
+        quantity: parseInt(type.quantity),
+        description: type.description || null,
+        features: [] // TODO: Add features support
+      }));
 
-      // Add images
-      formData.images.forEach(file => {
-        formDataToSend.append('images', file);
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        toast.error('Please log in to create a listing');
+        return;
+      }
+
+      const response = await fetch('http://localhost:5001/api/tickets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...ticketData,
+          ticket_types: ticketTypes
+        }),
       });
-
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/ticket`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formDataToSend,
-        }
-      );
 
       if (response.ok) {
         toast.success('Event listing created successfully!');
@@ -285,7 +335,7 @@ export const TicketListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
         if (onClose) onClose();
       } else {
         const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to create listing');
+        toast.error(errorData.message || 'Failed to create listing');
       }
     } catch (error) {
       console.error('Error creating ticket listing:', error);

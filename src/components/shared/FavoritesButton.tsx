@@ -26,14 +26,15 @@ export function FavoritesButton({
   const [isServerAvailable, setIsServerAvailable] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    if (user && isServerAvailable) {
-      checkFavoriteStatus();
-    }
-    if (isServerAvailable) {
-      loadFavoriteCount();
-    }
-  }, [user, entityId, isServerAvailable]);
+  // Disabled Supabase requests
+  // useEffect(() => {
+  //   if (user && isServerAvailable) {
+  //     checkFavoriteStatus();
+  //   }
+  //   if (isServerAvailable) {
+  //     loadFavoriteCount();
+  //   }
+  // }, [user, entityId, isServerAvailable]);
 
   // Retry logic - attempt to reconnect after failures
   useEffect(() => {
@@ -151,92 +152,14 @@ export function FavoritesButton({
       return;
     }
 
-    if (!isServerAvailable) {
-      // Optimistically update UI when server is unavailable
-      setIsFavorited(!isFavorited);
-      if (!isFavorited) {
-        setFavoriteCount(prev => prev + 1);
-      } else {
-        setFavoriteCount(prev => Math.max(0, prev - 1));
-      }
-      return;
+    // Disabled Supabase requests - just update UI locally
+    setIsFavorited(!isFavorited);
+    if (!isFavorited) {
+      setFavoriteCount(prev => prev + 1);
+    } else {
+      setFavoriteCount(prev => Math.max(0, prev - 1));
     }
-
-    setLoading(true);
-
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        alert('Please sign in again');
-        setLoading(false);
-        return;
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        if (controller && !controller.signal.aborted) {
-          controller.abort();
-        }
-      }, 10000); // 10 second timeout for user actions
-
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/favorites/toggle`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            user_id: user.id,
-            entity_id: entityId,
-            entity_type: entityType
-          }),
-          signal: controller.signal
-        }
-      );
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-        setIsFavorited(data.is_favorited);
-        setFavoriteCount(data.count);
-        setIsServerAvailable(true);
-        setRetryCount(0); // Reset retry count on success
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        
-        // Provide user-friendly error messages
-        if (response.status === 401) {
-          alert('Please sign in again');
-        } else if (response.status === 403) {
-          alert('Permission denied');
-        } else {
-          alert('Failed to update favorite. Please try again.');
-        }
-        
-        if (response.status >= 500) {
-          setIsServerAvailable(false);
-        }
-      }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('Favorites request timed out');
-        // Don't show alert, just silently fail
-      } else {
-        // Network error - fall back to optimistic UI update
-        setIsFavorited(!isFavorited);
-        if (!isFavorited) {
-          setFavoriteCount(prev => prev + 1);
-        } else {
-          setFavoriteCount(prev => Math.max(0, prev - 1));
-        }
-        setIsServerAvailable(false);
-      }
-    } finally {
-      setLoading(false);
-    }
+    return;
   };
 
   const getIconSize = () => {

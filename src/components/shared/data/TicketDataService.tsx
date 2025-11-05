@@ -224,18 +224,18 @@ export const useTicketData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/tickets?${params}`,
+        `http://localhost:5001/api/tickets?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.events && data.events.length > 0) {
-          return processFilteredData(data.events, filters, context);
+        if (data.success && data.data && data.data.length > 0) {
+          return processFilteredData(data.data, filters, context);
         }
       }
     } catch (error) {
@@ -248,13 +248,39 @@ export const useTicketData = () => {
   };
 
   const processFilteredData = (
-    data: TicketListing[],
+    data: any[],
     filters: Partial<TicketFilters>,
     context: TicketDataContext
   ): TicketListing[] => {
-    let processedData = data.map(ticket => ({
-      ...ticket,
-      isOwner: context.userId ? ticket.userId === context.userId : false,
+    let processedData = data.map((ticket: any) => ({
+      id: ticket.id?.toString() || '',
+      title: ticket.title || '',
+      organizer: ticket.organizer || ticket.display_name || ticket.username || '',
+      organizerAvatar: ticket.avatar_url || '',
+      category: ticket.event_type || ticket.category?.[0] || 'Event',
+      subcategory: ticket.category?.[1] || '',
+      eventDate: ticket.event_date || '',
+      eventTime: ticket.event_time || '',
+      venue: ticket.venue || '',
+      location: `${ticket.city || ''}, ${ticket.state || ''}`.replace(/^,\s*|,\s*$/g, '') || ticket.location || '',
+      price: ticket.ticket_types?.[0]?.price || 0,
+      currency: 'USD',
+      totalTickets: ticket.total_capacity || 0,
+      availableTickets: ticket.total_capacity || 0,
+      description: ticket.description || '',
+      features: Array.isArray(ticket.ticket_types) ? ticket.ticket_types.map((tt: any) => tt.name) : [],
+      images: Array.isArray(ticket.images) ? ticket.images : [],
+      rating: ticket.rating || 0,
+      totalReviews: ticket.total_reviews || 0,
+      tags: Array.isArray(ticket.tags) ? ticket.tags : [],
+      ageRestriction: ticket.age_restriction || '',
+      dresscode: ticket.dresscode || '',
+      policies: ticket.policies || [],
+      status: ticket.status || 'active',
+      isOwner: context.userId ? ticket.user_id?.toString() === context.userId : false,
+      userId: ticket.user_id?.toString(),
+      sales: ticket.sales || 0,
+      earnings: ticket.earnings || 0,
     }));
 
     // Apply admin tab filtering first
@@ -370,8 +396,38 @@ export const useTicketData = () => {
     return processedData;
   };
 
+  const fetchTicketStats = async (userId: string): Promise<any> => {
+    try {
+      const response = await fetch(
+        `http://localhost:5001/api/tickets/user/${userId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+    } catch (error) {
+      console.error('Error loading ticket stats from API:', error);
+    }
+
+    // Fallback to mock stats
+    return {
+      total_events: 0,
+      active_events: 0,
+      total_tickets_sold: 0,
+      total_revenue: 0,
+      upcoming_events: 0
+    };
+  };
+
   return {
     fetchTicketListings,
+    fetchTicketStats,
   };
 };
 

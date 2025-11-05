@@ -130,18 +130,18 @@ export const useInvestorData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/investors?${params}`,
+        `http://localhost:5001/api/investors?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.investors && data.investors.length > 0) {
-          return processFilteredData(data.investors, filters, context);
+        if (data && data.length > 0) {
+          return processFilteredData(data, filters, context);
         }
       }
     } catch (error) {
@@ -154,13 +154,32 @@ export const useInvestorData = () => {
   };
 
   const processFilteredData = (
-    data: InvestorProfile[],
+    data: any[],
     filters: Partial<InvestorFilters>,
     context: InvestorDataContext
   ): InvestorProfile[] => {
-    let processedData = data.map(investor => ({
-      ...investor,
-      isOwner: context.userId ? investor.userId === context.userId : false,
+    let processedData = data.map((investor: any) => ({
+      id: investor.id?.toString() || '',
+      name: investor.display_name || investor.username || '',
+      type: investor.investment_focus || 'Investor',
+      focus: Array.isArray(investor.investment_focus_areas) ? investor.investment_focus_areas : [],
+      location: investor.location || '',
+      avatar: investor.avatar_url || '',
+      minimumInvestment: investor.minimum_investment || investor.investment_range_min || 0,
+      maximumInvestment: investor.maximum_investment || investor.investment_range_max || 0,
+      investmentStage: Array.isArray(investor.preferred_stages) ? investor.preferred_stages : [],
+      portfolio: Array.isArray(investor.portfolio_companies) ? investor.portfolio_companies : [],
+      bio: investor.bio || investor.user_bio || '',
+      experience: investor.years_experience ? `${investor.years_experience} years` : '0 years',
+      totalInvestments: investor.total_investments || 0,
+      successfulExits: investor.successful_exits || 0,
+      responseTime: '24 hours', // Default value
+      investmentCount: investor.total_investments || 0,
+      status: investor.availability_status || 'active',
+      isOwner: context.userId ? investor.user_id?.toString() === context.userId : false,
+      userId: investor.user_id?.toString(),
+      rating: investor.rating || 0,
+      totalReviews: investor.total_reviews || 0,
     }));
 
     // Apply admin tab filtering first
@@ -246,8 +265,38 @@ export const useInvestorData = () => {
     return processedData;
   };
 
+  const fetchInvestorStats = async (userId: string): Promise<any> => {
+    try {
+      const response = await fetch(
+        `http://localhost:5001/api/investors/user/${userId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+    } catch (error) {
+      console.error('Error loading investor stats from API:', error);
+    }
+
+    // Fallback to mock stats
+    return {
+      total_investors: 0,
+      active_investors: 0,
+      total_investments: 0,
+      total_invested: 0,
+      average_investment: 0
+    };
+  };
+
   return {
     fetchInvestorProfiles,
+    fetchInvestorStats,
   };
 };
 

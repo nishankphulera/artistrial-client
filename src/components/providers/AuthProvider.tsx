@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok) return { error: { message: data.message || 'Login failed' } };
 
       // Save token and user
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('access_token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
 
@@ -80,7 +80,7 @@ const signUp = async (data: any) => {
 
 
   const signOut = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     setUser(null);
   };

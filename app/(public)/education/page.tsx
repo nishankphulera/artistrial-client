@@ -451,18 +451,41 @@ export default function EducationPage({ isDashboardDarkMode = false }: Education
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/education?${params}`,
+        `http://localhost:5001/api/education?${params}`,
         {
           headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.courses && data.courses.length > 0) {
-          setCourses(data.courses);
+        if (data && data.length > 0) {
+          // Transform server data to match our interface
+          const transformedData = data.map((course: any) => ({
+            id: course.id.toString(),
+            title: course.title,
+            instructor: course.display_name || course.username || 'Unknown Instructor',
+            instructorId: course.user_id?.toString() || 'unknown',
+            location: course.location || 'Online',
+            rating: 4.5 + Math.random() * 0.5, // Mock rating since not in API
+            price: course.price || 0,
+            category: course.category,
+            description: course.description,
+            format: course.format || 'Online',
+            duration: course.duration || '8 weeks',
+            level: course.level || 'Beginner',
+            languages: course.languages || ['English'],
+            avatar: course.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+            availability: course.status === 'active' ? 'Available' : 'Coming Soon',
+            thumbnail: course.thumbnail_url || 'https://images.unsplash.com/photo-1606983340126-99ab4feaa64a?w=400&h=300&fit=crop',
+            curriculum: course.curriculum || [],
+            total_reviews: Math.floor(Math.random() * 50) + 10, // Mock reviews
+            students_enrolled: Math.floor(Math.random() * 20) + 5,
+            next_start_date: course.start_date || new Date().toISOString().split('T')[0],
+          }));
+          setCourses(transformedData);
         }
       }
     } catch (error) {
@@ -474,19 +497,24 @@ export default function EducationPage({ isDashboardDarkMode = false }: Education
 
   const loadReviews = async (courseId: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/reviews/education/${courseId}`,
+      // For now, we'll use mock reviews since the server doesn't have a reviews endpoint yet
+      const mockReviews = [
         {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
+          id: '1',
+          user: 'John Doe',
+          rating: 5,
+          comment: 'Excellent course! Very well structured and informative.',
+          date: '2024-01-15'
+        },
+        {
+          id: '2',
+          user: 'Jane Smith',
+          rating: 4,
+          comment: 'Great content, learned a lot. Would recommend.',
+          date: '2024-01-10'
         }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setReviews(data.reviews);
-      }
+      ];
+      setReviews(mockReviews);
     } catch (error) {
       console.error('Error loading reviews:', error);
     }

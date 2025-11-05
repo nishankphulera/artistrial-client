@@ -12,7 +12,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId, publicAnonKey } from '@/utils/supabase/info';
 
 interface ProfileFormData {
   username: string;
@@ -88,6 +87,25 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
   const [newFocus, setNewFocus] = useState('');
   const [newSpecialization, setNewSpecialization] = useState('');
   const [newBarAdmission, setNewBarAdmission] = useState('');
+  
+  // KYC state
+  const [kycData, setKycData] = useState({
+    legal_name: '',
+    date_of_birth: '',
+    nationality: '',
+    tax_id: '',
+    street_address: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: '',
+    government_id_url: '',
+    proof_of_address_url: '',
+    business_name: '',
+    business_ein: '',
+    business_type: '',
+    business_registration_url: ''
+  });
 
   // Fetch profile data
   useEffect(() => {
@@ -98,74 +116,129 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
         setLoading(true);
         const token = localStorage.getItem('access_token');
         
-        // First try to get the profile
-        let response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/profiles/${user.id}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          setProfileData({
-            username: data.profile.username || '',
-            full_name: data.profile.full_name || '',
-            bio: data.profile.bio || '',
-            location: data.profile.location || '',
-            website: data.profile.website || '',
-            phone: data.profile.phone || '',
-            avatar_url: data.profile.avatar_url || '',
-            profile_type: data.profile.profile_type || 'Artist',
-            specialties: data.profile.specialties || [],
-            venue_capacity: data.profile.venue_capacity || 0,
-            venue_amenities: data.profile.venue_amenities || [],
-            investment_range: data.profile.investment_range || { min: 0, max: 0 },
-            investment_focus: data.profile.investment_focus || [],
-            legal_specialization: data.profile.legal_specialization || [],
-            bar_admission: data.profile.bar_admission || []
-          });
-        } else if (response.status === 404) {
-          // Profile not found, try to fix/create it
-          console.log('Profile not found, attempting to fix...');
-          const fixResponse = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/profiles/fix/${user.id}`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
+        // Get user ID from user or localStorage
+        let userId = user.id;
+        if (!userId && typeof window !== 'undefined') {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              userId = parsedUser?.id;
+            } catch (e) {
+              console.error('Error parsing stored user:', e);
             }
-          );
+          }
+        }
+        
+        if (!userId) {
+          console.error('No user ID available');
+          toast.error('Unable to load profile');
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch user profile from server API
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Fetch both user data and user profile data
+        const [userResponse, profileResponse] = await Promise.all([
+          fetch(`http://localhost:5001/api/users/${userId}`, { headers }),
+          fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, { headers })
+        ]);
 
-          if (fixResponse.ok) {
-            const fixData = await fixResponse.json();
-            console.log('Profile fixed successfully:', fixData);
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log('User data received:', userData);
+          
+          let profileData: any = {
+            location: '',
+            website: '',
+            phone: '',
+            specialties: [],
+            venue_capacity: 0,
+            venue_amenities: [],
+            investment_range_min: 0,
+            investment_range_max: 0,
+            investment_focus: [],
+            legal_specialization: [],
+            bar_admission: []
+          };
+          
+          // If profile exists, use it
+          if (profileResponse.ok) {
+            const profileResponseData = await profileResponse.json();
+            // Handle different response formats - could be wrapped in 'data' or direct object
+            profileData = profileResponseData.data || profileResponseData || profileData;
+            console.log('Profile data received:', profileData);
+          }
+          
+          // Convert server data to profile format
+          // Ensure arrays are properly handled (could be null from database)
+          const safeArray = (arr: any) => Array.isArray(arr) ? arr : (arr ? [arr] : []);
+          
+          setProfileData({
+            username: userData.username || userData.email?.split('@')[0] || '',
+            full_name: userData.display_name || userData.username || '',
+            bio: userData.bio || '',
+            location: profileData.location || '',
+            website: profileData.website || '',
+            phone: profileData.phone || '',
+            avatar_url: userData.avatar_url || '',
+            profile_type: userData.role || 'Artist',
+            specialties: safeArray(profileData.specialties),
+            venue_capacity: profileData.venue_capacity || 0,
+            venue_amenities: safeArray(profileData.venue_amenities),
+            investment_range: { 
+              min: profileData.investment_range_min || 0, 
+              max: profileData.investment_range_max || 0 
+            },
+            investment_focus: safeArray(profileData.investment_focus),
+            legal_specialization: safeArray(profileData.legal_specialization),
+            bar_admission: safeArray(profileData.bar_admission)
+          });
+        } else if (userResponse.status === 404) {
+          // User not found, create default profile from current user data
+          console.log('User not found in database, creating default profile...');
+          const storedUser = localStorage.getItem('user');
+          let currentUser = user;
+          
+          if (!currentUser && storedUser) {
+            try {
+              currentUser = JSON.parse(storedUser);
+            } catch (e) {
+              console.error('Error parsing stored user:', e);
+            }
+          }
+          
+          if (currentUser) {
             setProfileData({
-              username: fixData.profile.username || '',
-              full_name: fixData.profile.full_name || '',
-              bio: fixData.profile.bio || '',
-              location: fixData.profile.location || '',
-              website: fixData.profile.website || '',
-              phone: fixData.profile.phone || '',
-              avatar_url: fixData.profile.avatar_url || '',
-              profile_type: fixData.profile.profile_type || 'Artist',
-              specialties: fixData.profile.specialties || [],
-              venue_capacity: fixData.profile.venue_capacity || 0,
-              venue_amenities: fixData.profile.venue_amenities || [],
-              investment_range: fixData.profile.investment_range || { min: 0, max: 0 },
-              investment_focus: fixData.profile.investment_focus || [],
-              legal_specialization: fixData.profile.legal_specialization || [],
-              bar_admission: fixData.profile.bar_admission || []
+              username: currentUser.username || currentUser.email?.split('@')[0] || '',
+              full_name: currentUser.display_name || currentUser.email?.split('@')[0] || '',
+              bio: '',
+              location: '',
+              website: '',
+              phone: '',
+              avatar_url: '',
+              profile_type: currentUser.role || 'Artist',
+              specialties: [],
+              venue_capacity: 0,
+              venue_amenities: [],
+              investment_range: { min: 0, max: 0 },
+              investment_focus: [],
+              legal_specialization: [],
+              bar_admission: []
             });
           } else {
-            console.error('Failed to fix profile');
-            toast.error('Failed to initialize profile data');
+            toast.error('Unable to load profile data');
           }
         } else {
-          console.error('Failed to fetch profile:', response.status);
+          console.error('Failed to fetch profile:', userResponse.status);
           toast.error('Failed to load profile data');
         }
       } catch (error) {
@@ -194,23 +267,102 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
     try {
       setSaving(true);
       const token = localStorage.getItem('access_token');
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/profiles/${user.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(profileData)
+      
+      // Get user ID
+      let userId = user.id;
+      if (!userId && typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            userId = parsedUser?.id;
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
+          }
         }
-      );
+      }
+      
+      if (!userId) {
+        toast.error('Unable to identify user');
+        setSaving(false);
+        return;
+      }
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // Update user basic info
+      const userUpdateData = {
+        username: profileData.username,
+        display_name: profileData.full_name,
+        bio: profileData.bio,
+        avatar_url: profileData.avatar_url,
+        role: profileData.profile_type
+      };
+      
+      // Update user profile extended info
+      const profileUpdateData = {
+        location: profileData.location,
+        website: profileData.website,
+        phone: profileData.phone,
+        specialties: profileData.specialties,
+        venue_capacity: profileData.venue_capacity,
+        venue_amenities: profileData.venue_amenities,
+        investment_range_min: profileData.investment_range.min,
+        investment_range_max: profileData.investment_range.max,
+        investment_focus: profileData.investment_focus,
+        legal_specialization: profileData.legal_specialization,
+        bar_admission: profileData.bar_admission
+      };
+      
+      // Update user first
+      const userResponse = await fetch(`http://localhost:5001/api/users/${userId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(userUpdateData)
+      });
 
-      if (response.ok) {
-        toast.success('Profile updated successfully!');
-        router.push('/dashboard/profile');
+      if (!userResponse.ok) {
+        const error = await userResponse.json().catch(() => ({}));
+        toast.error(error.message || 'Failed to update user information');
+        setSaving(false);
+        return;
+      }
+
+      // Check if profile exists, then update or create
+      const checkProfileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+        method: 'GET',
+        headers
+      });
+
+      let profileResponse;
+      if (checkProfileResponse.ok) {
+        // Profile exists, update it
+        profileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(profileUpdateData)
+        });
       } else {
-        const error = await response.json();
+        // Profile doesn't exist, create it
+        profileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(profileUpdateData)
+        });
+      }
+
+      if (profileResponse.ok) {
+        toast.success('Profile updated successfully!');
+        // Refresh the profile data
+        window.location.reload();
+      } else {
+        const error = await profileResponse.json().catch(() => ({}));
         toast.error(error.message || 'Failed to update profile');
       }
     } catch (error) {
@@ -218,6 +370,60 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
       toast.error('Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleKYCSubmit = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      // Get user ID
+      let userId = user.id;
+      if (!userId && typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            userId = parsedUser?.id;
+          } catch (e) {
+            console.error('Error parsing stored user:', e);
+          }
+        }
+      }
+      
+      if (!userId) {
+        toast.error('Unable to identify user');
+        return;
+      }
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(
+        `http://localhost:5001/api/user-profiles/user/${userId}/kyc`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ kycData })
+        }
+      );
+
+      if (response.ok) {
+        toast.success('KYC information submitted successfully!');
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to submit KYC information');
+      }
+    } catch (error) {
+      console.error('Error submitting KYC:', error);
+      toast.error('Failed to submit KYC information');
     }
   };
 
@@ -810,7 +1016,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                       <Input
                         id="legal_name"
                         placeholder="As shown on government ID"
-                        defaultValue="John Alexander Smith"
+                        value={kycData.legal_name}
+                        onChange={(e) => setKycData({...kycData, legal_name: e.target.value})}
                       />
                     </div>
                     <div>
@@ -821,6 +1028,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                           id="date_of_birth"
                           type="date"
                           className="pl-10"
+                          value={kycData.date_of_birth}
+                          onChange={(e) => setKycData({...kycData, date_of_birth: e.target.value})}
                         />
                       </div>
                     </div>
@@ -847,6 +1056,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                         id="tax_id"
                         placeholder="XXX-XX-XXXX"
                         type="password"
+                        value={kycData.tax_id}
+                        onChange={(e) => setKycData({...kycData, tax_id: e.target.value})}
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Required for tax reporting purposes
@@ -871,6 +1082,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <Input
                       id="street_address"
                       placeholder="123 Main Street"
+                      value={kycData.street_address}
+                      onChange={(e) => setKycData({...kycData, street_address: e.target.value})}
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -879,6 +1092,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                       <Input
                         id="city"
                         placeholder="New York"
+                        value={kycData.city}
+                        onChange={(e) => setKycData({...kycData, city: e.target.value})}
                       />
                     </div>
                     <div>
@@ -886,6 +1101,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                       <Input
                         id="state"
                         placeholder="NY"
+                        value={kycData.state}
+                        onChange={(e) => setKycData({...kycData, state: e.target.value})}
                       />
                     </div>
                     <div>
@@ -893,6 +1110,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                       <Input
                         id="postal_code"
                         placeholder="10001"
+                        value={kycData.postal_code}
+                        onChange={(e) => setKycData({...kycData, postal_code: e.target.value})}
                       />
                     </div>
                   </div>
@@ -1052,7 +1271,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                       </Button>
                       <Button 
                         className="flex-1 bg-[#FF8D28] hover:bg-[#FF8D28]/90"
-                        disabled
+                        onClick={handleKYCSubmit}
                       >
                         Submit for Verification
                       </Button>

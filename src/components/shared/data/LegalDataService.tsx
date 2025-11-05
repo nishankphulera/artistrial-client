@@ -166,18 +166,18 @@ export const useLegalData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/legal?${params}`,
+        `http://localhost:5001/api/legal?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.lawyers && data.lawyers.length > 0) {
-          return processFilteredData(data.lawyers, filters, context);
+        if (data.success && data.data && data.data.length > 0) {
+          return processFilteredData(data.data, filters, context);
         }
       }
     } catch (error) {
@@ -190,13 +190,35 @@ export const useLegalData = () => {
   };
 
   const processFilteredData = (
-    data: LegalService[],
+    data: any[],
     filters: Partial<LegalFilters>,
     context: LegalDataContext
   ): LegalService[] => {
-    let processedData = data.map(lawyer => ({
-      ...lawyer,
-      isOwner: context.userId ? lawyer.userId === context.userId : false,
+    let processedData = data.map((lawyer: any) => ({
+      id: lawyer.id?.toString() || '',
+      name: lawyer.display_name || lawyer.username || '',
+      firm: lawyer.title || '',
+      specialization: Array.isArray(lawyer.specializations) ? lawyer.specializations : [],
+      location: `${lawyer.city || ''}, ${lawyer.state || ''}`.replace(/^,\s*|,\s*$/g, '') || lawyer.location || '',
+      avatar: lawyer.avatar_url || '',
+      hourlyRate: lawyer.hourly_rate || 0,
+      experience: lawyer.experience || '0 years',
+      education: Array.isArray(lawyer.education) ? lawyer.education : [],
+      barAdmissions: Array.isArray(lawyer.bar_numbers) ? lawyer.bar_numbers : [],
+      languages: Array.isArray(lawyer.languages) ? lawyer.languages : ['English'],
+      rating: lawyer.rating || 0,
+      totalReviews: lawyer.total_reviews || 0,
+      totalCases: lawyer.total_cases || 0,
+      successRate: lawyer.success_rate || 0,
+      responseTime: lawyer.response_time || '24 hours',
+      description: lawyer.description || lawyer.bio || '',
+      services: Array.isArray(lawyer.practice_areas) ? lawyer.practice_areas : [],
+      availability: lawyer.availability || 'Available',
+      status: lawyer.status || 'active',
+      isOwner: context.userId ? lawyer.user_id?.toString() === context.userId : false,
+      userId: lawyer.user_id?.toString(),
+      caseLoad: lawyer.case_load || 0,
+      earnings: lawyer.earnings || 0,
     }));
 
     // Apply admin tab filtering first
@@ -291,8 +313,38 @@ export const useLegalData = () => {
     return processedData;
   };
 
+  const fetchLegalStats = async (userId: string): Promise<any> => {
+    try {
+      const response = await fetch(
+        `http://localhost:5001/api/legal/user/${userId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+    } catch (error) {
+      console.error('Error loading legal stats from API:', error);
+    }
+
+    // Fallback to mock stats
+    return {
+      total_lawyers: 0,
+      active_lawyers: 0,
+      total_consultations: 0,
+      total_revenue: 0,
+      average_hourly_rate: 0
+    };
+  };
+
   return {
     fetchLegalServices,
+    fetchLegalStats,
   };
 };
 

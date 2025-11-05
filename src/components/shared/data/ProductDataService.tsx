@@ -202,7 +202,7 @@ export const useProductData = () => {
     context: ProductDataContext = { context: 'public' }
   ): Promise<ProductService[]> => {
     try {
-      // Try to fetch from API first
+      // Try to fetch from server API first
       const params = new URLSearchParams();
       if (filters.searchTerm) params.append('q', filters.searchTerm);
       if (Array.isArray(filters.category) && filters.category.length > 0) {
@@ -215,23 +215,53 @@ export const useProductData = () => {
         params.append('availability', filters.availability);
       }
       if (filters.type && filters.type !== 'all') {
-        params.append('type', filters.type);
+        params.append('format', filters.type);
       }
       if (filters.sortBy) params.append('sort', filters.sortBy);
+      if (filters.priceRange) {
+        params.append('min_price', filters.priceRange[0].toString());
+        params.append('max_price', filters.priceRange[1].toString());
+      }
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/products?${params}`,
+        `http://localhost:5001/api/product-services?${params}`,
         {
           headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.products && data.products.length > 0) {
-          return processFilteredData(data.products, filters, context);
+        if (data && data.length > 0) {
+          // Transform server data to match our ProductService interface
+          const transformedData = data.map((item: any) => ({
+            id: item.id.toString(),
+            title: item.title,
+            vendor: item.display_name || item.username,
+            vendorAvatar: item.avatar_url,
+            category: item.category,
+            subcategory: item.subcategory,
+            type: item.format === 'service' ? 'service' : 'product',
+            price: item.price,
+            currency: 'USD',
+            description: item.description,
+            features: item.features || [],
+            images: item.images || [],
+            rating: 4.5, // Default rating since not in API
+            totalReviews: 0, // Default reviews since not in API
+            deliveryTime: item.delivery_time,
+            availability: item.status === 'active' ? 'Available' : 'Unavailable',
+            location: item.location,
+            tags: item.tags || [],
+            policies: item.refund_policy ? [item.refund_policy] : [],
+            userId: item.user_id.toString(),
+            status: item.status,
+            sales: 0, // Default sales since not in API
+            earnings: 0, // Default earnings since not in API
+          }));
+          return processFilteredData(transformedData, filters, context);
         }
       }
     } catch (error) {

@@ -9,9 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, Package, DollarSign, Upload, Calendar } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { createListingCreationEvent } from '@/utils/userEvents';
 
 interface ProductServicesFormData {
   title: string;
@@ -219,15 +219,32 @@ export const ProductServicesListingForm: React.FC<{ onClose?: () => void }> = ({
       const token = localStorage.getItem('access_token');
       
       const listingData = {
-        ...formData,
-        userId: user.id,
-        type: 'product_service',
+        user_id: user.id,
+        title: formData.title,
+        category: formData.category,
+        subcategory: formData.subcategory,
+        description: formData.description,
         price: parseFloat(formData.price),
+        pricing_type: formData.pricingType,
+        subscription_period: formData.subscriptionPeriod,
+        features: formData.features,
+        delivery_time: formData.deliveryTime,
+        format: formData.format,
+        location: formData.location,
+        is_shipping_included: formData.isShippingIncluded,
+        shipping_cost: parseFloat(formData.shippingCost) || 0,
+        images: formData.images,
+        download_files: formData.downloadFiles,
+        requirements: formData.requirements,
+        refund_policy: formData.refundPolicy,
+        tags: formData.tags,
+        support_included: formData.supportIncluded,
+        support_duration: formData.supportDuration,
         status: 'active'
       };
 
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f6985a91/listings/products`,
+        'http://localhost:5001/api/product-services',
         {
           method: 'POST',
           headers: {
@@ -239,6 +256,27 @@ export const ProductServicesListingForm: React.FC<{ onClose?: () => void }> = ({
       );
 
       if (response.ok) {
+        const responseData = await response.json();
+        const productServiceId = responseData.data?.id || responseData.id;
+        
+        // Create user event for product/service creation
+        if (productServiceId) {
+          await createListingCreationEvent(
+            user.id,
+            'product_service',
+            productServiceId,
+            formData.title,
+            `Created product/service listing: ${formData.title} in ${formData.category}`,
+            {
+              category: formData.category,
+              subcategory: formData.subcategory,
+              price: parseFloat(formData.price),
+              pricing_type: formData.pricingType,
+              format: formData.format
+            }
+          );
+        }
+        
         toast.success('Product/Service listing created successfully!');
         setHasUnsavedChanges(false);
         if (onClose) onClose();
