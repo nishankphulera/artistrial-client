@@ -1,34 +1,28 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ReactCrop, { Crop, PixelCrop, makeAspectCrop, centerCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import {
-  Users,
   MessageCircle,
   Calendar,
   TrendingUp,
-  Award,
   Heart,
   Share2,
   Eye,
   ArrowRight,
+  Loader2,
   Star,
   MapPin,
   Clock,
   Plus,
   Filter,
   Search,
-  Palette,
   Camera,
-  Music,
-  Video,
   Briefcase,
-  BookOpen,
-  Zap,
-  Globe,
-  Target
+  DollarSign
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +38,12 @@ import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { uploadImageToS3 } from '@/utils/s3Upload';
+import { apiUrl } from '@/utils/api';
+
+const generateId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2, 10);
 
 interface CommunityPost {
   id: string;
@@ -57,34 +57,114 @@ interface CommunityPost {
   views: number;
   created_at: string;
   featured_image?: string;
+  is_liked?: boolean;
 }
 
-interface CommunityEvent {
+interface GigRole {
+  id: string;
+  name: string;
+  requiredSlots: number;
+  approvedCount: number;
+  pendingCount: number;
+  description: string | null;
+}
+
+interface ApiPost {
+  id: number | string;
+  title: string;
+  content: string;
+  author?: string;
+  username?: string;
+  author_avatar?: string;
+  category?: string;
+  likes_count?: number;
+  comments_count?: number;
+  views_count?: number;
+  created_at: string;
+  featured_image?: string;
+  is_liked?: boolean;
+}
+
+interface ApiGig {
+  id: number | string;
+  title: string;
+  description: string;
+  gig_type: string;
+  category?: string | null;
+  experience_level?: string | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  budget_currency?: string;
+  rate_type?: string | null;
+  location?: string | null;
+  is_remote?: boolean;
+  application_deadline?: string | null;
+  contact_email?: string | null;
+  application_link?: string | null;
+  skills_required?: string[] | string;
+  status?: string;
+  created_at: string;
+  banner_image?: string | null;
+  user_id?: number | string;
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  roles?: Array<{
+    id?: number | string;
+    name?: string;
+    requiredSlots?: number;
+    required_slots?: number;
+    approvedCount?: number;
+    pendingCount?: number;
+    description?: string | null;
+  }>;
+}
+
+interface ApiGigApplication {
+  gig_id: number | string;
+  [key: string]: unknown;
+}
+
+interface ApiGigRole {
+  id?: number | string;
+  name?: string;
+  requiredSlots?: number;
+  required_slots?: number;
+  approvedCount?: number;
+  approved_count?: number;
+  pendingCount?: number;
+  pending_count?: number;
+  description?: string | null;
+  role_description?: string | null;
+}
+
+interface CommunityGig {
   id: string;
   title: string;
   description: string;
-  date: string;
-  time: string;
-  location: string;
-  type: 'online' | 'in-person' | 'hybrid';
-  attendees: number;
-  max_attendees: number;
-  image_url: string;
-  organizer: string;
-}
-
-interface CommunityMember {
-  id: string;
-  name: string;
-  username: string;
-  avatar: string;
-  bio: string;
-  specialties: string[];
-  reputation_score: number;
-  posts_count: number;
-  location: string;
-  joined_date: string;
-  is_verified: boolean;
+  gig_type: string;
+  category: string | null;
+  experience_level: string | null;
+  budget_min: number | null;
+  budget_max: number | null;
+  budget_currency: string;
+  rate_type: string | null;
+  location: string | null;
+  is_remote: boolean;
+  application_deadline: string | null;
+  contact_email: string | null;
+  application_link: string | null;
+  skills_required: string[];
+  status: string;
+  created_at: string;
+  banner_image: string | null;
+  ownerId: string;
+  poster: {
+    displayName: string;
+    username?: string;
+    avatar?: string;
+  };
+  roles: GigRole[];
 }
 
 export default function CommunityPage() {
@@ -92,8 +172,7 @@ export default function CommunityPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('feed');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
-  const [events, setEvents] = useState<CommunityEvent[]>([]);
-  const [members, setMembers] = useState<CommunityMember[]>([]);
+  const [gigs, setGigs] = useState<CommunityGig[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [communityStats, setCommunityStats] = useState({
@@ -110,6 +189,86 @@ export default function CommunityPage() {
     category: '',
     featured_image: ''
   });
+  const [applyingGigId, setApplyingGigId] = useState<string | null>(null);
+  const [appliedGigIds, setAppliedGigIds] = useState<string[]>([]);
+  const [selectedGigRoles, setSelectedGigRoles] = useState<Record<string, string>>({});
+  const [likingPosts, setLikingPosts] = useState<Record<string, boolean>>({});
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredPosts = useMemo(() => {
+    if (!normalizedSearch) {
+      return posts;
+    }
+
+    return posts.filter((post) => {
+      const haystack = [
+        post.title,
+        post.content,
+        post.author,
+        post.category,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [posts, normalizedSearch]);
+
+  const filteredGigs = useMemo(() => {
+    if (!normalizedSearch) {
+      return gigs;
+    }
+
+    return gigs.filter((gig) => {
+      const skillBundle = gig.skills_required.join(' ');
+      const rolesBundle = gig.roles?.map((role) => role.name).join(' ') ?? '';
+      const haystack = [
+        gig.title,
+        gig.description,
+        gig.gig_type,
+        gig.category,
+        gig.experience_level,
+        gig.location,
+        gig.poster.displayName,
+        gig.poster.username,
+        skillBundle,
+        rolesBundle,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [gigs, normalizedSearch]);
+
+  const formatGigBudget = useCallback((gig: CommunityGig) => {
+    const { budget_min, budget_max, budget_currency, rate_type } = gig;
+
+    if (budget_min === null && budget_max === null) {
+      return 'Budget not specified';
+    }
+
+    const formatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: budget_currency || 'USD',
+      maximumFractionDigits: 0,
+    });
+
+    const rateSuffix = rate_type ? ` / ${rate_type}` : '';
+
+    if (budget_min !== null && budget_max !== null) {
+      return `${formatter.format(budget_min)} - ${formatter.format(budget_max)}${rateSuffix}`;
+    }
+
+    if (budget_min !== null) {
+      return `${formatter.format(budget_min)}${rateSuffix}`;
+    }
+
+    return `${formatter.format(budget_max as number)}${rateSuffix}`;
+  }, []);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showImageEditor, setShowImageEditor] = useState(false);
@@ -136,6 +295,7 @@ export default function CommunityPage() {
     fetchCommunityData();
   }, []);
 
+
   const fetchCommunityData = async () => {
     try {
       setLoading(true);
@@ -152,7 +312,7 @@ export default function CommunityPage() {
       
       // Fetch community stats
       try {
-        const statsResponse = await fetch('http://localhost:5001/api/community/posts/stats', { headers });
+        const statsResponse = await fetch(apiUrl('community/posts/stats'), { headers });
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
           console.log('Stats data:', statsData);
@@ -178,13 +338,13 @@ export default function CommunityPage() {
       
       // Fetch posts
       const postsResponse = await fetch(
-        `http://localhost:5001/api/community/posts?limit=20&offset=0&status=published&sort=newest`,
+        `${apiUrl('community/posts')}?limit=20&offset=0&status=published&sort=newest`,
         { headers }
       );
       
       if (postsResponse.ok) {
         const postsData = await postsResponse.json();
-        const formattedPosts: CommunityPost[] = postsData.data?.map((post: any) => ({
+        const formattedPosts: CommunityPost[] = postsData.data?.map((post: ApiPost) => ({
           id: post.id.toString(),
           title: post.title,
           content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
@@ -204,60 +364,217 @@ export default function CommunityPage() {
         setPosts([]);
       }
       
-      // Fetch events
-      const eventsResponse = await fetch(
-        `http://localhost:5001/api/community/events?status=upcoming&limit=20&offset=0`,
-        { headers }
-      );
-      
-      if (eventsResponse.ok) {
-        const eventsData = await eventsResponse.json();
-        const formattedEvents: CommunityEvent[] = eventsData.data?.map((event: any) => ({
-          id: event.id.toString(),
-          title: event.title,
-          description: event.description.substring(0, 150) + (event.description.length > 150 ? '...' : ''),
-          date: event.event_date,
-          time: event.event_time || 'TBD',
-          location: event.location,
-          type: event.event_type as 'online' | 'in-person' | 'hybrid',
-          attendees: event.attendees_count || 0,
-          max_attendees: event.max_attendees || null,
-          image_url: event.image_url || '',
-          organizer: event.organizer || event.username || 'Unknown'
-        })) || [];
-        setEvents(formattedEvents);
-      } else {
-        console.error('Failed to fetch events');
-        setEvents([]);
-      }
-      
-      // For members, we can fetch from users API or use mock data for now
-      // This would require a separate endpoint to get community members
-      const mockMembers: CommunityMember[] = [
-        {
-          id: '1',
-          name: 'Sarah Chen',
-          username: '@sarahchen',
-          avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b64c?w=100',
-          bio: 'Digital artist specializing in surreal landscapes and color theory. 5+ years experience.',
-          specialties: ['Digital Art', 'Color Theory', 'Landscape'],
-          reputation_score: 4.9,
-          posts_count: 127,
-          location: 'San Francisco, CA',
-          joined_date: '2023-03-15',
-          is_verified: true
+      // Fetch gigs
+      try {
+        const gigsResponse = await fetch(
+          `${apiUrl('community/gigs')}?status=open&limit=20&offset=0`,
+          { headers }
+        );
+
+        if (gigsResponse.ok) {
+          const gigsData = await gigsResponse.json();
+          const formattedGigs: CommunityGig[] = gigsData.data?.map((gig: ApiGig) => ({
+            id: gig.id.toString(),
+            title: gig.title,
+            description: gig.description,
+            gig_type: gig.gig_type,
+            category: gig.category ?? null,
+            experience_level: gig.experience_level ?? null,
+            budget_min: gig.budget_min !== undefined && gig.budget_min !== null ? Number(gig.budget_min) : null,
+            budget_max: gig.budget_max !== undefined && gig.budget_max !== null ? Number(gig.budget_max) : null,
+            budget_currency: gig.budget_currency || 'USD',
+            rate_type: gig.rate_type ?? null,
+            location: gig.location ?? null,
+            is_remote: Boolean(gig.is_remote),
+            application_deadline: gig.application_deadline ?? null,
+            contact_email: gig.contact_email ?? null,
+            application_link: gig.application_link ?? null,
+            skills_required: Array.isArray(gig.skills_required)
+              ? gig.skills_required.filter(Boolean)
+              : (gig.skills_required
+                  ? String(gig.skills_required)
+                      .split(',')
+                      .map((skill: string) => skill.trim())
+                      .filter(Boolean)
+                  : []),
+            status: gig.status || 'open',
+            created_at: gig.created_at,
+            banner_image: gig.banner_image || null,
+            ownerId: gig.user_id ? gig.user_id.toString() : '',
+            poster: {
+              displayName: gig.display_name || gig.username || 'Community Member',
+              username: gig.username || undefined,
+              avatar: gig.avatar_url || undefined,
+            },
+          roles: Array.isArray(gig.roles)
+            ? gig.roles
+                .map((role: ApiGigRole) => ({
+                  id: role?.id ? String(role.id) : generateId(),
+                  name: typeof role?.name === 'string' ? role.name : 'Role',
+                  requiredSlots: Number.isFinite(Number(role?.requiredSlots))
+                    ? Number(role.requiredSlots)
+                    : Number.isFinite(Number(role?.required_slots))
+                    ? Number(role.required_slots)
+                    : 1,
+                  approvedCount: Number.isFinite
+                  (Number(role?.approvedCount))
+                    ? Number(role.approvedCount)
+                    : Number.isFinite(Number(role?.approved_count))
+                    ? Number(role.approved_count)
+                    : 0,
+                  pendingCount: Number.isFinite(Number(role?.pendingCount))
+                    ? Number(role.pendingCount)
+                    : Number.isFinite(Number(role?.pending_count))
+                    ? Number(role.pending_count)
+                    : 0,
+                  description:
+                    typeof role?.description === 'string' && role.description.trim().length > 0
+                      ? role.description.trim()
+                      : typeof role?.role_description === 'string' && role.role_description.trim().length > 0
+                      ? role.role_description.trim()
+                      : null,
+                }))
+            : [],
+          })) || [];
+
+          console.log('Formatted gigs:', formattedGigs);
+          setGigs(formattedGigs);
+          setSelectedGigRoles((prev) => {
+            const nextSelections: Record<string, string> = {};
+            for (const gig of formattedGigs) {
+              const prevSelection = prev[gig.id];
+              if (prevSelection && gig.roles.some((role) => role.id === prevSelection)) {
+                nextSelections[gig.id] = prevSelection;
+              }
+            }
+            return nextSelections;
+          });
+        } else {
+          setGigs([]);
         }
-      ];
-      setMembers(mockMembers);
-      
+      } catch (gigError) {
+        console.error('Failed to fetch gigs', gigError);
+        setGigs([]);
+      }
+
     } catch (error) {
       console.error('Error fetching community data:', error);
       setPosts([]);
-      setEvents([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchAppliedGigIds = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        setAppliedGigIds([]);
+        return;
+      }
+
+      const response = await fetch(apiUrl('community/gigs/applications'), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const gigIds =
+          Array.isArray(data?.data) ? data.data.map((application: ApiGigApplication) => String(application.gig_id)) : [];
+        setAppliedGigIds(gigIds);
+      } else if (response.status === 401) {
+        setAppliedGigIds([]);
+      } else {
+        console.error('Failed to fetch applied gigs');
+      }
+    } catch (error) {
+      console.error('Error fetching applied gigs:', error);
+    }
+  }, []);
+
+  const handleApplyToGig = useCallback(
+    async (gig: CommunityGig) => {
+      if (!user) {
+        router.push('/auth');
+        return;
+      }
+
+      const selectedRoleId = selectedGigRoles[gig.id];
+      const selectedRole =
+        gig.roles && gig.roles.length
+          ? gig.roles.find((role) => role.id === selectedRoleId)
+          : undefined;
+
+      if (gig.roles.length > 0 && !selectedRole) {
+        toast.error('Please select the role you are applying for.');
+        return;
+      }
+
+      try {
+        setApplyingGigId(gig.id);
+
+        const token = localStorage.getItem('access_token');
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+
+        if (!token) {
+          toast.error('Please log in to apply for this gig.');
+          router.push('/auth');
+          return;
+        }
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(apiUrl(`community/gigs/${gig.id}/apply`), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            status: 'applied',
+            roleId: selectedRole?.id,
+            roleName: selectedRole?.name,
+          }),
+        });
+
+        if (!response.ok) {
+          let message = 'Failed to mark application as applied.';
+          try {
+            const errorData = await response.json();
+            if (errorData?.message) {
+              message = errorData.message;
+            }
+          } catch {
+            // ignore JSON parsing errors
+          }
+          throw new Error(message);
+        }
+
+        setAppliedGigIds((prev) => (prev.includes(gig.id) ? prev : [...prev, gig.id]));
+        await fetchAppliedGigIds();
+        toast.success('Application marked as applied.');
+      } catch (error) {
+        console.error('Error marking application as applied:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to mark application as applied.');
+      } finally {
+        setApplyingGigId(null);
+      }
+    },
+    [fetchAppliedGigIds, router, selectedGigRoles, user]
+  );
+
+  useEffect(() => {
+    if (user) {
+      fetchAppliedGigIds();
+    } else {
+      setAppliedGigIds([]);
+    }
+  }, [fetchAppliedGigIds, user]);
 
   const timeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -269,15 +586,6 @@ export default function CommunityPage() {
     if (diffInDays < 7) return `${diffInDays}d ago`;
     const diffInWeeks = Math.floor(diffInDays / 7);
     return `${diffInWeeks}w ago`;
-  };
-
-  const formatEventDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,7 +627,6 @@ export default function CommunityPage() {
       setCrop(initialCrop);
     } else {
       // Auto-crop to fit image
-      const { width, height } = e.currentTarget;
       setCrop({
         unit: '%',
         x: 5,
@@ -334,7 +641,8 @@ export default function CommunityPage() {
     (
       image: HTMLImageElement,
       pixelCrop: PixelCrop,
-      fileName: string
+      fileName: string,
+      mimeType: string = 'image/jpeg'
     ): Promise<File> => {
       const canvas = document.createElement('canvas');
       const scaleX = image.naturalWidth / image.width;
@@ -372,12 +680,12 @@ export default function CommunityPage() {
             const file = new File([blob], fileName, { type: blob.type });
             resolve(file);
           },
-          selectedImage?.type || 'image/jpeg',
+          mimeType,
           0.95
         );
       });
     },
-    [selectedImage]
+    []
   );
 
   const handleCropComplete = async () => {
@@ -390,7 +698,8 @@ export default function CommunityPage() {
       const croppedFile = await getCroppedImg(
         imgRef.current,
         completedCrop,
-        selectedImage.name
+        selectedImage.name,
+        selectedImage.type || 'image/jpeg'
       );
       setSelectedImage(croppedFile);
       setImagePreview(URL.createObjectURL(croppedFile));
@@ -402,11 +711,15 @@ export default function CommunityPage() {
     }
   };
 
-  const handleImageUpload = async (file: File): Promise<string | null> => {
+  const uploadImageWithToast = async (
+    file: File,
+    folder: string,
+    setLoadingState: (value: boolean) => void
+  ): Promise<string | null> => {
     try {
-      setUploadingImage(true);
+      setLoadingState(true);
       toast.info('Uploading image to S3...');
-      const imageUrl = await uploadImageToS3(file, 'community/posts');
+      const imageUrl = await uploadImageToS3(file, folder);
       toast.success('Image uploaded successfully!');
       return imageUrl;
     } catch (error) {
@@ -414,7 +727,7 @@ export default function CommunityPage() {
       toast.error('Failed to upload image. Please try again.');
       return null;
     } finally {
-      setUploadingImage(false);
+      setLoadingState(false);
     }
   };
 
@@ -441,13 +754,13 @@ export default function CommunityPage() {
       // Upload image first if selected
       let imageUrl = postForm.featured_image;
       if (selectedImage) {
-        const uploadedUrl = await handleImageUpload(selectedImage);
+        const uploadedUrl = await uploadImageWithToast(selectedImage, 'community/posts', setUploadingImage);
         if (uploadedUrl) {
           imageUrl = uploadedUrl;
         }
       }
 
-      const response = await fetch('http://localhost:5001/api/community/posts', {
+      const response = await fetch(apiUrl('community/posts'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -481,6 +794,57 @@ export default function CommunityPage() {
       setIsSubmitting(false);
     }
   };
+
+  const handleTogglePostLike = useCallback(
+    async (postId: string, currentlyLiked: boolean) => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        router.push('/auth');
+        return;
+      }
+
+      if (likingPosts[postId]) {
+        return;
+      }
+
+      setLikingPosts((prev) => ({ ...prev, [postId]: true }));
+      try {
+        const response = await fetch(apiUrl(`community/posts/${postId}/like`), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          setPosts((prev) =>
+            prev.map((post) => {
+              if (post.id !== postId) {
+                return post;
+              }
+
+              const nextLikes = currentlyLiked ? Math.max(0, post.likes - 1) : post.likes + 1;
+              return {
+                ...post,
+                likes: nextLikes,
+                is_liked: !currentlyLiked,
+              };
+            })
+          );
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+      } finally {
+        setLikingPosts((prev) => {
+          const next = { ...prev };
+          delete next[postId];
+          return next;
+        });
+      }
+    },
+    [likingPosts, router]
+  );
 
   if (loading) {
     return (
@@ -540,6 +904,16 @@ export default function CommunityPage() {
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             )}
+            <Button
+              size="lg"
+              className="bg-[#FF8D28] text-white hover:bg-[#FF8D28]/90 px-8 py-4 text-lg font-semibold"
+              onClick={() => {
+                router.push('/community/gigs/new');
+              }}
+            >
+              <Briefcase className="mr-2 h-5 w-5" />
+              Create a Gig
+            </Button>
             <Button 
               size="lg" 
               variant="outline"
@@ -578,23 +952,14 @@ export default function CommunityPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              {/* Tabs hidden per user request */}
-              <TabsList className="hidden">
+              <TabsList className="flex flex-wrap gap-2 bg-transparent p-0">
                 <TabsTrigger value="feed" className="flex items-center gap-2 px-6">
                   <MessageCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Feed</span>
                 </TabsTrigger>
-                <TabsTrigger value="events" className="flex items-center gap-2 px-6">
-                  <Calendar className="h-4 w-4" />
-                  <span className="hidden sm:inline">Events</span>
-                </TabsTrigger>
-                <TabsTrigger value="members" className="flex items-center gap-2 px-6">
-                  <Users className="h-4 w-4" />
-                  <span className="hidden sm:inline">Members</span>
-                </TabsTrigger>
-                <TabsTrigger value="showcase" className="flex items-center gap-2 px-6">
-                  <Award className="h-4 w-4" />
-                  <span className="hidden sm:inline">Showcase</span>
+                <TabsTrigger value="gigs" className="flex items-center gap-2 px-6">
+                  <Briefcase className="h-4 w-4" />
+                  <span className="hidden sm:inline">Gigs</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -618,7 +983,7 @@ export default function CommunityPage() {
             <TabsContent value="feed" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
-                  {posts.map((post) => (
+                  {filteredPosts.map((post) => (
                     <Card key={post.id} className="hover:shadow-lg transition-all duration-300 overflow-hidden">
                       <CardContent className="p-0">
                         {post.featured_image && (
@@ -657,33 +1022,13 @@ export default function CommunityPage() {
                           <div className="flex items-center justify-between pt-4 border-t">
                             <div className="flex items-center gap-6 text-sm text-gray-600">
                               <button 
-                                className={`flex items-center gap-2 transition-colors ${(post as any).is_liked ? 'text-red-600' : 'hover:text-red-600'}`}
-                                onClick={async () => {
-                                  const token = localStorage.getItem('access_token');
-                                  if (!token) {
-                                    router.push('/auth');
-                                    return;
-                                  }
-                                  try {
-                                    const response = await fetch(
-                                      `http://localhost:5001/api/community/posts/${post.id}/like`,
-                                      {
-                                        method: 'POST',
-                                        headers: {
-                                          'Authorization': `Bearer ${token}`,
-                                          'Content-Type': 'application/json',
-                                        },
-                                      }
-                                    );
-                                    if (response.ok) {
-                                      fetchCommunityData();
-                                    }
-                                  } catch (error) {
-                                    console.error('Error toggling like:', error);
-                                  }
-                                }}
+                                className={`flex items-center gap-2 transition-colors ${post.is_liked ? 'text-red-600' : 'hover:text-red-600'}`}
+                                onClick={() => handleTogglePostLike(post.id, Boolean(post.is_liked))}
+                                disabled={Boolean(likingPosts[post.id])}
                               >
-                                <Heart className={`h-4 w-4 ${(post as any).is_liked ? 'fill-red-500 text-red-500' : ''}`} />
+                                <Heart
+                                  className={`h-4 w-4 ${post.is_liked ? 'text-red-500 fill-red-500' : ''}`}
+                                />
                                 {post.likes}
                               </button>
                               <button 
@@ -729,13 +1074,15 @@ export default function CommunityPage() {
                         <Plus className="mr-2 h-4 w-4" />
                         Create Post
                       </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Host Event
-                      </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        <Users className="mr-2 h-4 w-4" />
-                        Find Collaborators
+                      <Button
+                        className="w-full justify-start"
+                        variant="outline"
+                        onClick={() => {
+                          router.push('/community/gigs/new');
+                        }}
+                      >
+                        <Briefcase className="mr-2 h-4 w-4" />
+                        Create Gig
                       </Button>
                     </CardContent>
                   </Card>
@@ -766,127 +1113,249 @@ export default function CommunityPage() {
               </div>
             </TabsContent>
 
-            {/* Events Tab */}
-            <TabsContent value="events" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {events.map((event) => (
-                  <Card key={event.id} className="hover:shadow-lg transition-all duration-300 overflow-hidden">
-                    <div className="aspect-video overflow-hidden">
-                      <ImageWithFallback
-                        src={event.image_url}
-                        alt={event.title}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Badge 
-                          variant={event.type === 'online' ? 'secondary' : event.type === 'in-person' ? 'default' : 'outline'}
-                          className="text-xs"
-                        >
-                          {event.type === 'online' ? 'Online' : event.type === 'in-person' ? 'In Person' : 'Hybrid'}
-                        </Badge>
-                        <span className="text-sm text-gray-600">{formatEventDate(event.date)}</span>
-                      </div>
+            {/* Gigs Tab */}
+            <TabsContent value="gigs" className="space-y-6">
+              {filteredGigs.length === 0 ? (
+                <Card className="border-2 border-dashed border-purple-200">
+                  <CardContent className="py-12 text-center space-y-4">
+                    <Briefcase className="h-12 w-12 mx-auto text-purple-300" />
+                    <h3 className="text-xl font-semibold font-title">No gigs available yet</h3>
+                    <p className="text-gray-600 max-w-md mx-auto">
+                      Create the first opportunity and invite collaborators from the community.
+                    </p>
+                    <Button
+                      size="lg"
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                      onClick={() => {
+                        router.push('/community/gigs/new');
+                      }}
+                    >
+                      <Plus className="mr-2 h-5 w-5" />
+                      Create a Gig
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredGigs.map((gig) => {
+                    const isApplying = applyingGigId === gig.id;
+                    const hasApplied = appliedGigIds.includes(gig.id);
+                    const isOwner = Boolean(user?.id) && Boolean(gig.ownerId) && String(user.id) === gig.ownerId;
+                    const locationLabel = gig.is_remote
+                      ? gig.location
+                        ? `${gig.location} • Remote`
+                        : 'Remote'
+                      : gig.location || 'Location provided on request';
 
-                      <h3 className="text-lg font-semibold mb-2 font-title">{event.title}</h3>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                    return (
+                      <Card key={gig.id} className="hover:shadow-lg transition-all duration-300 overflow-hidden">
+                        {gig.banner_image && (
+                          <div className="aspect-[16/9] overflow-hidden">
+                            <ImageWithFallback
+                              src={gig.banner_image}
+                              alt={`${gig.title} banner`}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                            />
+                          </div>
+                        )}
+                        <CardContent className="p-6 space-y-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-2">
+                              <Badge variant="secondary" className="capitalize">
+                                {gig.gig_type.replace(/[_-]/g, ' ')}
+                              </Badge>
+                              {gig.status && gig.status !== 'open' && (
+                                <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                                  {gig.status}
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-sm text-gray-500 whitespace-nowrap">
+                              {timeAgo(gig.created_at)}
+                            </span>
+                          </div>
 
-                      <div className="flex items-center text-sm text-gray-600 mb-4">
-                        <MapPin className="h-4 w-4 mr-2" />
-                        <span>{event.location}</span>
-                      </div>
+                          <div>
+                            <h3 className="text-xl font-semibold mb-2 font-title">{gig.title}</h3>
+                            <p className="text-gray-600 line-clamp-3">{gig.description}</p>
+                          </div>
 
-                      <div className="flex items-center justify-between pt-4 border-t">
-                        <div className="flex items-center -space-x-2">
-                          {[...Array(Math.min(3, event.attendees))].map((_, i) => (
-                            <Avatar key={i} className="h-6 w-6 border-2 border-white">
-                              <AvatarImage src={`https://i.pravatar.cc/40?u=${event.id}-${i}`} />
-                              <AvatarFallback>A</AvatarFallback>
-                            </Avatar>
-                          ))}
-                          {event.attendees > 3 && (
-                            <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold">
-                              +{event.attendees - 3}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-purple-500" />
+                              <span>{locationLabel}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-green-500" />
+                              <span>{formatGigBudget(gig)}</span>
+                            </div>
+                            {gig.application_deadline && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-orange-500" />
+                                <span>
+                                  Apply by{' '}
+                                  {new Date(gig.application_deadline).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                            {gig.experience_level && (
+                              <div className="flex items-center gap-2">
+                                <Star className="h-4 w-4 text-yellow-500" />
+                                <span className="capitalize">{gig.experience_level}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {gig.roles.length > 0 && (
+                            <div className="space-y-2 rounded-lg border border-purple-100 bg-purple-50/50 p-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <p className="text-sm font-medium text-purple-700">Roles Needed</p>
+                                <p className="text-xs text-purple-500">
+                                  {hasApplied ? 'Application submitted' : 'Select a role before applying'}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                {gig.roles.map((role) => {
+                                  const totalSlots = role.requiredSlots || 0;
+                                  const approved = role.approvedCount || 0;
+                                  const remaining =
+                                    totalSlots === 0 ? 'Unlimited spots' : `${Math.max(totalSlots - approved, 0)} spot${Math.max(totalSlots - approved, 0) === 1 ? '' : 's'} left`;
+                                  return (
+                                    <div
+                                      key={role.id}
+                                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-xs sm:text-sm text-purple-700"
+                                    >
+                                      <div className="flex-1">
+                                        <span className="font-medium block">{role.name}</span>
+                                        {role.description && (
+                                          <span className="block text-[11px] text-purple-500/80 sm:text-xs">
+                                            {role.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-purple-500">
+                                        {totalSlots === 0
+                                          ? 'Unlimited approvals'
+                                          : `${approved}/${totalSlots} approved • ${remaining}`}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
-                        </div>
-                        <Button 
-                          size="sm"
-                          onClick={() => {
-                            const token = localStorage.getItem('access_token');
-                            if (!token) {
-                              router.push('/auth');
-                              return;
-                            }
-                            // Register for event
-                            fetch(`http://localhost:5001/api/community/events/${event.id}/register`, {
-                              method: 'POST',
-                              headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json',
-                              },
-                            })
-                            .then(res => res.json())
-                            .then(data => {
-                              if (data.success) {
-                                alert(`Registered for ${event.title}!`);
-                                fetchCommunityData();
-                              } else {
-                                alert(data.message || 'Failed to register');
-                              }
-                            })
-                            .catch(error => {
-                              console.error('Error registering for event:', error);
-                              alert('Failed to register for event');
-                            });
-                          }}
-                        >
-                          {event.attendees >= (event.max_attendees || Infinity) ? 'Full' : 'Register'}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {gig.skills_required.length > 0 ? (
+                              gig.skills_required.slice(0, 8).map((skill) => (
+                                <Badge key={skill} variant="outline" className="text-xs">
+                                  {skill}
+                                </Badge>
+                              ))
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-gray-500 border-dashed">
+                                General opportunity
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-12 w-12">
+                                <AvatarImage src={gig.poster.avatar} alt={gig.poster.displayName} />
+                                <AvatarFallback>{gig.poster.displayName[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-semibold font-title">{gig.poster.displayName}</p>
+                                {gig.poster.username && (
+                                  <p className="text-xs text-gray-500">{gig.poster.username}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {gig.contact_email && (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={`mailto:${gig.contact_email}`} target="_blank" rel="noreferrer">
+                                    Contact
+                                  </a>
+                                </Button>
+                              )}
+                              {isOwner && (
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link href={`/dashboard/gigs/${gig.id}/applications`}>
+                                    Manage Requests
+                                  </Link>
+                                </Button>
+                              )}
+                              {isOwner ? (
+                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-200 bg-purple-50">
+                                  You posted this gig
+                                </Badge>
+                              ) : (
+                                <>
+                                  {gig.roles.length > 0 && (
+                                    <Select
+                                      value={selectedGigRoles[gig.id] ?? undefined}
+                                      onValueChange={(value) =>
+                                        setSelectedGigRoles((prev) => ({
+                                          ...prev,
+                                          [gig.id]: value,
+                                        }))
+                                      }
+                                      disabled={isApplying || hasApplied}
+                                    >
+                                      <SelectTrigger className="w-full sm:w-48">
+                                        <SelectValue placeholder="Select a role" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {gig.roles.map((role) => (
+                                          <SelectItem key={role.id} value={role.id}>
+                                            {role.name}
+                                            {role.requiredSlots
+                                              ? ` (${role.approvedCount ?? 0}/${role.requiredSlots} approved)`
+                                              : ' (Unlimited slots)'}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    className="bg-purple-600 hover:bg-purple-700"
+                                    disabled={isApplying || hasApplied}
+                                    onClick={() => handleApplyToGig(gig)}
+                                  >
+                                    {isApplying ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Applying...
+                                      </>
+                                    ) : hasApplied ? (
+                                      'Applied'
+                                    ) : (
+                                      <>
+                                        Apply Now
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                      </>
+                                    )}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </TabsContent>
 
-            {/* Members Tab */}
-            <TabsContent value="members" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {members.map((member) => (
-                  <Card key={member.id} className="text-center hover:shadow-lg transition-all duration-300">
-                    <CardContent className="p-6">
-                      <Avatar className="h-24 w-24 mx-auto mb-4 border-4 border-purple-200">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback>{member.name[0]}</AvatarFallback>
-                      </Avatar>
-                      <h3 className="text-lg font-semibold font-title">{member.name}</h3>
-                      <p className="text-sm text-purple-600 mb-2">{member.username}</p>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{member.bio}</p>
-                      <div className="flex flex-wrap justify-center gap-2 mb-4">
-                        {member.specialties.slice(0, 3).map((spec) => (
-                          <Badge key={spec} variant="secondary">{spec}</Badge>
-                        ))}
-                      </div>
-                      <Button onClick={() => router.push(`/profile/${member.id}`)}>View Profile</Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-
-            {/* Showcase Tab */}
-            <TabsContent value="showcase" className="text-center">
-              <div className="py-12">
-                <Award className="h-16 w-16 mx-auto text-purple-300 mb-4" />
-                <h3 className="text-2xl font-semibold mb-2 font-title">Community Showcase</h3>
-                <p className="text-gray-600">Coming soon! A curated space for the best creations from our community.</p>
-              </div>
-            </TabsContent>
           </Tabs>
         </div>
       </section>
+
+      {/* Gig creation moved to /community/gigs/new */}
 
       {/* Create Post Dialog */}
       <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>

@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface TicketListing {
   id: string;
@@ -224,7 +225,7 @@ export const useTicketData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/tickets?${params}`,
+        `${apiUrl('tickets')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -311,7 +312,7 @@ export const useTicketData = () => {
         ticket.title.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
         ticket.description.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
         ticket.venue.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
-        ticket.tags.some(tag => tag.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
+        ticket.tags.some((tag: string) => tag.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
       );
     }
 
@@ -399,7 +400,7 @@ export const useTicketData = () => {
   const fetchTicketStats = async (userId: string): Promise<any> => {
     try {
       const response = await fetch(
-        `http://localhost:5001/api/tickets/user/${userId}`,
+        apiUrl(`tickets/user/${userId}`),
         {
           headers: {
             'Content-Type': 'application/json',

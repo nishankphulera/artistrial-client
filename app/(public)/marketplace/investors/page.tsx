@@ -72,11 +72,8 @@ interface Project {
   location: string;
 }
 
-interface InvestorsPageProps {
-  isDashboardDarkMode?: boolean;
-}
-
-export default function InvestorsPage({ isDashboardDarkMode = false }: InvestorsPageProps) {
+export default function InvestorsPage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const { fetchInvestorProfiles } = useInvestorData();
   const [investors, setInvestors] = useState<InvestorProfile[]>([]);
@@ -137,6 +134,7 @@ export default function InvestorsPage({ isDashboardDarkMode = false }: Investors
     customFilters: [
       {
         name: 'stage',
+        type: 'select' as const,
         options: [
           { value: 'Pre-Seed', label: 'Pre-Seed' },
           { value: 'Seed', label: 'Seed' },

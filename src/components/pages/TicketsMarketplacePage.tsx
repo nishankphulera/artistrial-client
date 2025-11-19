@@ -19,6 +19,7 @@ import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { TicketListingForm } from '@/components/forms/TicketListingForm';
 import { Ticket, Star, Users, Wrench, Palette } from 'lucide-react';
 import { CREATE_ROUTES } from '@/utils/routes';
+import { apiUrl } from '@/utils/api';
 
 interface TicketData {
   id: string;
@@ -121,7 +122,7 @@ export function TicketsMarketplacePage({
       }
       if (filters.sortBy) params.append('sort', filters.sortBy);
       
-      const response = await fetch(`http://localhost:5001/api/tickets?${params}`);
+      const response = await fetch(`${apiUrl('tickets')}?${params}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch tickets');
@@ -152,7 +153,7 @@ export function TicketsMarketplacePage({
     if (!selectedTicket) return;
     
     try {
-      const response = await fetch('http://localhost:5001/api/orders', {
+      const response = await fetch(apiUrl('orders'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,7 +243,13 @@ export function TicketsMarketplacePage({
         <FilterSidebar
           config={ticketFilterConfig}
           filters={filters}
-          onFiltersChange={setFilters}
+          onFiltersChange={(newFilters) => {
+            setFilters({
+              ...filters,
+              ...newFilters,
+              searchTerm: newFilters.searchTerm ?? filters.searchTerm,
+            } as TicketFilters);
+          }}
           resultCount={tickets.length}
           isDashboardDarkMode={isDashboardDarkMode}
         />
@@ -423,7 +430,7 @@ export function TicketsMarketplacePage({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <RatingSystem rating={ticket.rating} totalReviews={ticket.totalReviews} />
+                          <RatingSystem averageRating={ticket.rating} totalReviews={ticket.totalReviews} readOnly={true} />
                         </div>
                       </div>
                     </CardContent>

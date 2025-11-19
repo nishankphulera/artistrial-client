@@ -11,6 +11,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { formatPriceINR, convertUSDToINR } from '@/utils/currency';
+import { apiUrl } from '@/utils/api';
 
 interface Address {
   fullName: string;
@@ -69,7 +70,7 @@ export function AddressFormPage() {
     for (const item of items) {
       try {
         const response = await fetch(
-          `http://localhost:5001/api/assets/${item.artwork_id}`,
+          apiUrl(`assets/${item.artwork_id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -215,7 +216,7 @@ export function AddressFormPage() {
 
       // Create order on backend first
       const orderResponse = await fetch(
-        `http://localhost:5001/api/cart/${user?.id}/create-order`,
+        apiUrl(`cart/${user?.id}/create-order`),
         {
           method: 'POST',
           headers: {
@@ -276,7 +277,7 @@ export function AddressFormPage() {
 
             // Verify payment on backend
             const verifyResponse = await fetch(
-              `http://localhost:5001/api/cart/${user?.id}/verify-payment`,
+              apiUrl(`cart/${user?.id}/verify-payment`),
               {
                 method: 'POST',
                 headers: {

@@ -13,6 +13,7 @@ import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { createListingCreationEvent } from '@/utils/userEvents';
+import { apiUrl } from '@/utils/api';
 
 interface EducationFormData {
   title: string;
@@ -314,7 +315,7 @@ export const EducationListingForm: React.FC<{ onClose?: () => void }> = ({ onClo
       };
 
       const response = await fetch(
-        `http://localhost:5001/api/education`,
+        apiUrl('education'),
         {
           method: 'POST',
           headers: {

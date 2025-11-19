@@ -21,13 +21,8 @@ import {
   talentFilterConfig 
 } from '@/components/shared/data/TalentDataService';
 
-interface TalentMarketplacePageProps {
-  isDashboardDarkMode?: boolean;
-}
-
-export default function TalentMarketplacePage({
-  isDashboardDarkMode = false,
-}: TalentMarketplacePageProps) {
+export default function TalentMarketplacePage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const { fetchTalentProfiles } = useTalentData();
   const [talents, setTalents] = useState<TalentProfile[]>([]);

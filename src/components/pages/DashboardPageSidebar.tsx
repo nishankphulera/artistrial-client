@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/utils/api";
 import {
   TrendingUp,
   Eye,
@@ -438,7 +439,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
         if (!token) return;
 
         const response = await fetch(
-          `http://localhost:5001/api/cart/${user.id}`,
+          apiUrl(`cart/${user.id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -472,7 +473,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
       const token = localStorage.getItem('access_token');
       if (token) {
         const response = await fetch(
-          `http://localhost:5001/api/cart/${user.id}`,
+          apiUrl(`cart/${user.id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -502,7 +503,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
       const token = localStorage.getItem('access_token');
       if (token) {
         const response = await fetch(
-          `http://localhost:5001/api/cart/${user.id}`,
+          apiUrl(`cart/${user.id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -596,8 +597,8 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
   }, [user?.id, router]); // Only depend on user.id, not the entire user object
 
   const fetchDashboardData = async () => {
-    let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    const controller: AbortController | null = null;
+    const timeoutId: NodeJS.Timeout | null = null;
 
     try {
       const token = localStorage.getItem("access_token");
@@ -638,7 +639,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
 
       // Fetch user data to get subscription_type and avatar_url
       try {
-        const userResponse = await fetch(`http://localhost:5001/api/users/${userId}`, { headers });
+        const userResponse = await fetch(apiUrl(`users/${userId}`), { headers });
         if (userResponse.ok) {
           const fetchedUserData = await userResponse.json();
           setUserData(fetchedUserData); // Store full user data
@@ -683,12 +684,12 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
 
       // Fetch listings from all marketplaces
       const [assetsResponse, talentsResponse, studiosResponse, ticketsResponse, legalResponse, productServicesResponse] = await Promise.all([
-        fetch(`http://localhost:5001/api/assets/user/${userId}`, { headers }),
-        fetch(`http://localhost:5001/api/talents/user/${userId}`, { headers }),
-        fetch(`http://localhost:5001/api/studios/user/${userId}`, { headers }),
-        fetch(`http://localhost:5001/api/tickets/user/${userId}`, { headers }),
-        fetch(`http://localhost:5001/api/legal/user/${userId}`, { headers }),
-        fetch(`http://localhost:5001/api/product-services/user/${userId}`, { headers })
+        fetch(apiUrl(`assets/user/${userId}`), { headers }),
+        fetch(apiUrl(`talents/user/${userId}`), { headers }),
+        fetch(apiUrl(`studios/user/${userId}`), { headers }),
+        fetch(apiUrl(`tickets/user/${userId}`), { headers }),
+        fetch(apiUrl(`legal/user/${userId}`), { headers }),
+        fetch(apiUrl(`product-services/user/${userId}`), { headers })
       ]);
 
       // Process responses and combine into unified listings
@@ -830,7 +831,7 @@ export const DashboardPageSidebar: React.FC<DashboardPageSidebarProps> = ({
 
       // Fetch stats from API
       try {
-        const statsResponse = await fetch(`http://localhost:5001/api/stats/user/${userId}`, { headers });
+        const statsResponse = await fetch(apiUrl(`stats/user/${userId}`), { headers });
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
           if (statsData.success && statsData.data) {

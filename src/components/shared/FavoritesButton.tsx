@@ -6,7 +6,7 @@ import { projectId, publicAnonKey } from '@/utils/supabase/info';
 
 interface FavoritesButtonProps {
   entityId: string;
-  entityType: 'talent' | 'asset' | 'studio' | 'legal_service' | 'event' | 'project' | 'legal_resource';
+  entityType: 'talent' | 'asset' | 'studio' | 'legal_service' | 'event' | 'project' | 'legal_resource' | 'ticket';
   size?: 'sm' | 'md' | 'lg';
   showCount?: boolean;
   variant?: 'default' | 'ghost' | 'outline';

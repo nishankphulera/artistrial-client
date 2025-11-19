@@ -66,11 +66,8 @@ interface ServiceRequest {
   consultationType: string;
 }
 
-interface LegalServicesPageProps {
-  isDashboardDarkMode?: boolean;
-}
-
-export default function LegalServicesPage({ isDashboardDarkMode = false }: LegalServicesPageProps) {
+export default function LegalServicesPage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const [lawyers, setLawyers] = useState<LegalService[]>([]);
   const [resources, setResources] = useState<LegalResource[]>([]);

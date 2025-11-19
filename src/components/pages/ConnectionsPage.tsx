@@ -336,7 +336,7 @@ export function ConnectionsPage({ isDashboardDarkMode = false }: ConnectionsPage
   const [activeTab, setActiveTab] = useState('connections');
 
   const filteredConnections = useMemo(() => {
-    let filtered = connections.filter(connection => {
+    const filtered = connections.filter(connection => {
       const matchesSearch = connection.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            connection.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            connection.specialties.some(specialty => 

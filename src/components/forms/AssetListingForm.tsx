@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { createListingCreationEvent } from '@/utils/userEvents';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
+import { apiUrl } from '@/utils/api';
 
 
 interface AssetFormData {
@@ -226,7 +227,7 @@ export const AssetListingForm: React.FC<AssetListingFormProps> = ({ onClose, isD
       };
 
       const response = await fetch(
-        'http://localhost:5001/api/assets',
+        apiUrl('assets'),
         {
           method: 'POST',
           headers: {

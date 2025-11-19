@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
+import { apiUrl } from '@/utils/api';
 
 interface Comment {
   id: string;
@@ -74,7 +75,7 @@ export default function CommunityPostDetailPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:5001/api/community/posts/${id}`, { headers });
+      const response = await fetch(apiUrl(`community/posts/${id}`), { headers });
       if (response.ok) {
         const data = await response.json();
         const postData = Array.isArray(data) ? data[0] : (data?.data || data);
@@ -118,7 +119,7 @@ export default function CommunityPostDetailPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:5001/api/community/posts/${id}/comments`, { headers });
+      const response = await fetch(apiUrl(`community/posts/${id}/comments`), { headers });
       if (response.ok) {
         const data = await response.json();
         const commentsData = Array.isArray(data) ? data : (data?.data || []);
@@ -146,7 +147,7 @@ export default function CommunityPostDetailPage() {
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(
-        `http://localhost:5001/api/community/posts/${id}/like`,
+        apiUrl(`community/posts/${id}/like`),
         {
           method: 'POST',
           headers: {
@@ -189,7 +190,7 @@ export default function CommunityPostDetailPage() {
       setSubmittingComment(true);
       const token = localStorage.getItem('access_token');
       const response = await fetch(
-        `http://localhost:5001/api/community/posts/${id}/comments`,
+        apiUrl(`community/posts/${id}/comments`),
         {
           method: 'POST',
           headers: {
@@ -300,7 +301,6 @@ export default function CommunityPostDetailPage() {
                   src={post.featured_image}
                   alt={post.title}
                   className="w-full h-auto"
-                  fallbackSrc="/placeholder-image.png"
                 />
               </div>
             )}

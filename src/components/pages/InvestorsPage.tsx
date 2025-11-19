@@ -135,6 +135,7 @@ export function InvestorsPage({ isDashboardDarkMode = false }: InvestorsPageProp
     customFilters: [
       {
         name: 'stage',
+        type: 'select' as const,
         options: [
           { value: 'Pre-Seed', label: 'Pre-Seed' },
           { value: 'Seed', label: 'Seed' },

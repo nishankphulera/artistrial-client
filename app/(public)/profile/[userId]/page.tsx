@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Settings, Share, Heart, Eye, Grid, User, MapPin, Star, Camera, Mic, Palette, Building, DollarSign, Calendar, Briefcase, Plus, Check, Edit3, ExternalLink, MessageSquare } from 'lucide-react';
+import { Share, Grid, User, Users, Eye, MapPin, Star, Camera, Mic, Palette, Building, DollarSign, Calendar, Briefcase, Plus, Check, Edit3, ExternalLink, MessageSquare, ShieldCheck, FileText, Mail, Phone, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ArtistProfilePage } from '@/components/pages/ArtistProfilePage';
+import { apiUrl } from '@/utils/api';
 
 interface ServiceModule {
   id: string;
@@ -24,6 +25,20 @@ interface ServiceModule {
   enabled: boolean;
   description?: string;
   portfolio?: any[];
+}
+
+interface ActivityItem {
+  id: string;
+  type: 'Asset' | 'Talent' | 'Review';
+  title: string;
+  description?: string;
+  timestamp?: string;
+}
+
+interface QuickFact {
+  label: string;
+  value: React.ReactNode;
+  hidden?: boolean;
 }
 
 export default function ProfilePage() {
@@ -35,12 +50,13 @@ export default function ProfilePage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
-  const [listings, setListings] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [assets, setAssets] = useState<any[]>([]);
   const [talents, setTalents] = useState<any[]>([]);
   const [reviewStats, setReviewStats] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followStats, setFollowStats] = useState<any>(null);
+  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
 
   // Helper function to safely access array length
   const safeArrayLength = (arr: any): number => {
@@ -73,7 +89,7 @@ export default function ProfilePage() {
         setLoading(true);
         console.log('Fetching profile for user ID:', targetUserId);
 
-        const apiBaseUrl = 'http://localhost:5001/api';
+        const apiBaseUrl = apiUrl('');
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
         };
@@ -96,6 +112,7 @@ export default function ProfilePage() {
         if (user && token) {
           try {
             const profileResponse = await fetch(`${apiBaseUrl}/user-profiles/user/${targetUserId}`, { headers });
+            console.log('Profile response:', profileResponse);
             if (profileResponse.ok) {
               profileInfo = await profileResponse.json();
             }
@@ -134,13 +151,11 @@ export default function ProfilePage() {
           }));
         }
 
-        // Fetch talent listings (all talents, will filter by user_id in the response)
-        const talentsResponse = await fetch(`${apiBaseUrl}/talents/search`, { headers });
+        // Fetch talent listings for this user
+        const talentsResponse = await fetch(`${apiBaseUrl}/talents/user/${targetUserId}`, { headers });
         let talentsData = [];
         if (talentsResponse.ok) {
-          const allTalents = await talentsResponse.json();
-          // Filter talents by user_id
-          talentsData = allTalents.filter((talent: any) => talent.user_id?.toString() === targetUserId?.toString());
+          talentsData = await talentsResponse.json();
         }
 
         // Fetch reviews
@@ -156,6 +171,56 @@ export default function ProfilePage() {
         if (statsResponse.ok) {
           statsData = await statsResponse.json();
         }
+
+        // Fetch follow stats
+        let followStatsData = null;
+        try {
+          const followStatsResponse = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/stats`, { headers });
+          if (followStatsResponse.ok) {
+            followStatsData = await followStatsResponse.json();
+          }
+        } catch (e) {
+          console.log('Could not load follow stats');
+        }
+
+        const buildActivityFeed = (): ActivityItem[] => {
+          const items: ActivityItem[] = [];
+
+          safeArray(assetsData).forEach((asset: any) => {
+            items.push({
+              id: `asset-${asset.id}`,
+              type: 'Asset',
+              title: asset.name || asset.title || 'Portfolio asset',
+              description: asset.description,
+              timestamp: asset.created_at || asset.updated_at
+            });
+          });
+
+          safeArray(talentsData).forEach((talent: any) => {
+            items.push({
+              id: `talent-${talent.id}`,
+              type: 'Talent',
+              title: talent.title || 'Talent listing',
+              description: talent.category || talent.description,
+              timestamp: talent.created_at || talent.updated_at
+            });
+          });
+
+          safeArray(reviewsData).forEach((review: any, index: number) => {
+            items.push({
+              id: `review-${review.id || index}`,
+              type: 'Review',
+              title: `Received a ${review.rating || ''}★ review`,
+              description: review.review_text || review.comment,
+              timestamp: review.created_at
+            });
+          });
+
+          return items
+            .filter((item) => item.timestamp)
+            .sort((a, b) => new Date(b.timestamp || '').getTime() - new Date(a.timestamp || '').getTime())
+            .slice(0, 8);
+        };
 
         // Check if current user is following this user
         if (user && token && !isOwnProfile) {
@@ -175,6 +240,8 @@ export default function ProfilePage() {
         setTalents(talentsData);
         setReviews(reviewsData);
         setReviewStats(statsData);
+        setFollowStats(followStatsData);
+        setActivityFeed(buildActivityFeed());
         
       } catch (error) {
         console.error('Error fetching profile data:', error);
@@ -235,7 +302,6 @@ export default function ProfilePage() {
     }
 
     try {
-      const apiBaseUrl = 'http://localhost:5001/api';
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -243,7 +309,7 @@ export default function ProfilePage() {
 
       if (isFollowing) {
         // Unfollow
-        const response = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/follow`, {
+        const response = await fetch(apiUrl(`user-follows/${targetUserId}/follow`), {
           method: 'DELETE',
           headers,
         });
@@ -253,7 +319,7 @@ export default function ProfilePage() {
         }
       } else {
         // Follow
-        const response = await fetch(`${apiBaseUrl}/user-follows/${targetUserId}/follow`, {
+        const response = await fetch(apiUrl(`user-follows/${targetUserId}/follow`), {
           method: 'POST',
           headers,
         });
@@ -300,14 +366,13 @@ export default function ProfilePage() {
         return;
       }
 
-      const apiBaseUrl = 'http://localhost:5001/api';
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       };
 
       // Update user profile
-      const response = await fetch(`${apiBaseUrl}/user-profiles/user/${user.id}`, {
+      const response = await fetch(apiUrl(`user-profiles/user/${user.id}`), {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -331,6 +396,240 @@ export default function ProfilePage() {
       console.error('Error saving profile:', error);
       alert('Failed to save profile. Please try again.');
     }
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return 'Not provided';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not provided';
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return 'Date unavailable';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const toNumeric = (value: any): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatCurrency = (value: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: value >= 1000 ? 0 : 2,
+      }).format(value);
+    } catch {
+      return `$${value.toFixed(0)}`;
+    }
+  };
+
+  const formatCurrencyRange = (min?: number | string | null, max?: number | string | null) => {
+    const minValue = toNumeric(min);
+    const maxValue = toNumeric(max);
+
+    if (minValue === null && maxValue === null) {
+      return 'Not specified';
+    }
+
+    if (minValue !== null && maxValue !== null) {
+      if (minValue === maxValue) {
+        return formatCurrency(minValue);
+      }
+      return `${formatCurrency(minValue)} - ${formatCurrency(maxValue)}`;
+    }
+
+    if (minValue !== null) {
+      return `${formatCurrency(minValue)}+`;
+    }
+
+    return `Up to ${formatCurrency(maxValue as number)}`;
+  };
+
+  const renderKycBadge = (status?: string | null) => {
+    const normalized = (status || 'not_submitted').toLowerCase();
+    const statusStyles: Record<string, { label: string; className: string; icon?: React.ReactNode }> = {
+      approved: {
+        label: 'Verified',
+        className: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        icon: <ShieldCheck className="h-3.5 w-3.5 mr-1" />,
+      },
+      verified: {
+        label: 'Verified',
+        className: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        icon: <ShieldCheck className="h-3.5 w-3.5 mr-1" />,
+      },
+      pending: {
+        label: 'Pending review',
+        className: 'bg-amber-100 text-amber-700 border border-amber-200',
+        icon: <FileText className="h-3.5 w-3.5 mr-1" />,
+      },
+      rejected: {
+        label: 'Rejected',
+        className: 'bg-red-100 text-red-700 border border-red-200',
+        icon: <FileText className="h-3.5 w-3.5 mr-1" />,
+      },
+      not_submitted: {
+        label: 'Not submitted',
+        className: 'bg-gray-100 text-gray-700 border border-gray-200',
+        icon: <FileText className="h-3.5 w-3.5 mr-1" />,
+      },
+    };
+
+    const style = statusStyles[normalized] || statusStyles.not_submitted;
+
+    return (
+      <Badge variant="outline" className={`inline-flex items-center ${style.className}`}>
+        {style.icon}
+        <span className="capitalize">{style.label}</span>
+      </Badge>
+    );
+  };
+
+  const resolveLabel = (entry: any): string => {
+    if (!entry) return '';
+    if (typeof entry === 'string') return entry;
+    return (
+      entry.name ||
+      entry.title ||
+      entry.category ||
+      entry.type ||
+      entry.label ||
+      entry.displayName ||
+      ''
+    );
+  };
+
+  const formatWebsiteLabel = (url?: string | null) => {
+    if (!url) return '';
+    try {
+      const { hostname } = new URL(url);
+      return hostname.replace(/^www\./, '') || url;
+    } catch {
+      return url;
+    }
+  };
+
+  const formatTalentPrice = (talent: any) => {
+    const hourlyRate = toNumeric(talent?.hourly_rate);
+    const fixedPrice = toNumeric(talent?.fixed_price);
+    const pricingType = (talent?.pricing_type || '').toLowerCase();
+
+    if (!pricingType) {
+      if (hourlyRate !== null) return `${formatCurrency(hourlyRate)}/hr`;
+      if (fixedPrice !== null) return formatCurrency(fixedPrice);
+      return 'Pricing on request';
+    }
+
+    switch (pricingType) {
+      case 'hourly':
+        return hourlyRate !== null ? `${formatCurrency(hourlyRate)}/hr` : 'Hourly rate on request';
+      case 'fixed':
+        return fixedPrice !== null ? formatCurrency(fixedPrice) : 'Fixed price on request';
+      case 'both': {
+        const hourlyText = hourlyRate !== null ? `${formatCurrency(hourlyRate)}/hr` : null;
+        const fixedText = fixedPrice !== null ? formatCurrency(fixedPrice) : null;
+        return [hourlyText, fixedText].filter(Boolean).join(' • ') || 'Pricing on request';
+      }
+      default:
+        if (hourlyRate !== null && fixedPrice !== null) {
+          return `${formatCurrency(hourlyRate)}/hr • ${formatCurrency(fixedPrice)}`;
+        }
+        if (hourlyRate !== null) return `${formatCurrency(hourlyRate)}/hr`;
+        if (fixedPrice !== null) return formatCurrency(fixedPrice);
+        return 'Pricing on request';
+    }
+  };
+
+  const generateClientId = (prefix: string) => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return `${prefix}-${crypto.randomUUID()}`;
+    }
+    return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+  };
+
+  const portfolioItems = (() => {
+    const profilePortfolio = safeArray(profileData?.portfolio_items);
+    if (profilePortfolio.length > 0) {
+      return profilePortfolio.map((item: any) => ({
+        id: item.id || item.asset_id || generateClientId('profile-portfolio'),
+        title: item.title || item.name || 'Untitled asset',
+        description: item.description || '',
+        imageUrl: item.image_url || item.thumbnail_url || item.url || '',
+        createdAt: item.created_at || item.updated_at,
+        tags: safeArray(item.tags || (item.category ? [item.category] : null)),
+        status: item.status,
+        mediaType: item.media_type || item.type || item.format,
+        url: item.url || item.external_url,
+      }));
+    }
+
+    return safeArray(assets).map((asset: any) => ({
+      id: asset.id || generateClientId('asset'),
+      title: asset.title || asset.name || 'Untitled asset',
+      description: asset.description || '',
+      imageUrl: asset.thumbnail_url || asset.url || asset.image_url || '',
+      createdAt: asset.created_at || asset.updated_at,
+      tags: safeArray(asset.tags || asset.categories),
+      mediaType: asset.media_type || asset.type,
+      status: asset.status,
+      url: asset.url,
+    }));
+  })();
+
+  const talentShowcase = safeArray(talents).map((talent: any) => ({
+    id: talent.id || generateClientId('talent'),
+    title: talent.title || 'Talent listing',
+    category: talent.category,
+    description: talent.description,
+    experience: talent.experience,
+    availability: talent.availability,
+    location: talent.location,
+    isRemote: talent.is_remote,
+    languages: safeArray(talent.languages),
+    skills: safeArray(talent.skills),
+    pricing: formatTalentPrice(talent),
+    createdAt: talent.created_at || talent.updated_at,
+    status: talent.status,
+  }));
+
+  const getTalentIcon = (category?: string) => {
+    const normalized = (category || '').toLowerCase();
+    if (normalized.includes('music') || normalized.includes('audio')) {
+      return <Mic className="h-5 w-5" />;
+    }
+    if (normalized.includes('visual') || normalized.includes('art')) {
+      return <Palette className="h-5 w-5" />;
+    }
+    if (normalized.includes('photo') || normalized.includes('video')) {
+      return <Camera className="h-5 w-5" />;
+    }
+    if (normalized.includes('studio')) {
+      return <Building className="h-5 w-5" />;
+    }
+    if (normalized.includes('marketing') || normalized.includes('business')) {
+      return <Briefcase className="h-5 w-5" />;
+    }
+    if (normalized.includes('team') || normalized.includes('collab')) {
+      return <Users className="h-5 w-5" />;
+    }
+    return <Sparkles className="h-5 w-5" />;
   };
 
   if (loading) {
@@ -653,19 +952,46 @@ export default function ProfilePage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-3">
-                        {[
-                          'Updated portfolio with new artwork',
-                          'Completed collaboration with Studio XYZ',
-                          'Posted new service offering',
-                          'Received 5-star review from client'
-                        ].map((activity, index) => (
-                          <div key={index} className={`flex items-center p-3 rounded-lg ${isDashboardDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                            <div className={`w-2 h-2 rounded-full mr-3 ${isDashboardDarkMode ? 'bg-purple-400' : 'bg-purple-600'}`}></div>
-                            <span className={isDashboardDarkMode ? 'text-gray-300' : 'text-gray-700'}>{activity}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {activityFeed.length > 0 ? (
+                        <div className="space-y-3">
+                          {activityFeed.map((activity) => (
+                            <div
+                              key={activity.id}
+                              className={`flex items-start justify-between p-4 rounded-lg ${isDashboardDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}
+                            >
+                              <div className="flex-1 pr-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="secondary" className="capitalize">
+                                    {activity.type.toLowerCase()}
+                                  </Badge>
+                                  {activity.timestamp && (
+                                    <span className={`text-xs ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                      {formatDateTime(activity.timestamp)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`font-medium ${isDashboardDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                                  {activity.title}
+                                </p>
+                                {activity.description && (
+                                  <p className={`mt-1 text-sm ${isDashboardDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {activity.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={`p-6 text-center rounded-lg ${isDashboardDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                          <p className="font-medium">No recent activity yet.</p>
+                          <p className="text-sm mt-1">
+                            {isOwnProfile
+                              ? 'Once you add portfolio items, services, or receive reviews, they will show up here.'
+                              : 'This creator hasn\'t logged any public activity yet.'}
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -673,56 +999,132 @@ export default function ProfilePage() {
 
               <TabsContent value="portfolio">
                 <Card className={isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : ''}>
-                  <CardHeader>
-                    <CardTitle className={isDashboardDarkMode ? 'text-white' : ''}>Portfolio</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {safeArray(profileData?.portfolio_items).length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {safeArray(profileData.portfolio_items).map((item: any, index: number) => (
-                          <div key={index} className={`group cursor-pointer rounded-lg overflow-hidden ${isDashboardDarkMode ? 'bg-gray-700' : 'bg-white'} shadow-sm hover:shadow-md transition-shadow`}>
-                            <div className="aspect-square bg-gray-100 relative">
-                              {item.image_url ? (
-                                <ImageWithFallback 
-                                  src={item.image_url} 
-                                  alt={item.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Camera className="h-12 w-12 text-gray-400" />
+                 
+                  <CardContent className="space-y-8">
+                  
+
+                    {talentShowcase.length > 0 && (
+                      <section className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className={`text-lg font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                            Services & Talent Listings
+                          </h3>
+                          <Badge variant="secondary">
+                            {talentShowcase.length} listing{talentShowcase.length > 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-1 gap-5">
+                          {talentShowcase.map((talent) => (
+                            <div
+                              key={talent.id}
+                              className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${isDashboardDarkMode ? 'border-gray-700/60 bg-gray-900/50 hover:border-purple-500/40' : 'border-gray-200 bg-white hover:border-purple-200/80'}`}
+                            >
+                              <div className={`absolute inset-x-0 top-0 h-1 ${isDashboardDarkMode ? 'bg-gradient-to-r from-purple-500/80 via-blue-500/80 to-teal-500/80' : 'bg-gradient-to-r from-purple-500 via-blue-500 to-teal-500'}`} />
+
+                              <div className="relative p-6 md:p-7 space-y-6">
+                                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5">
+                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 flex-1">
+                                    <div className="flex items-start gap-4">
+                                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm ${isDashboardDarkMode ? 'border-purple-500/40 bg-purple-500/10 text-purple-200' : 'border-purple-200 bg-purple-50 text-purple-600'}`}>
+                                        {getTalentIcon(talent.category)}
+                                      </div>
+                                      <div className="space-y-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <h4 className={`text-lg font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                            {talent.title}
+                                          </h4>
+                                          {talent.status && (
+                                            <Badge variant="outline" className="capitalize">
+                                              {talent.status}
+                                            </Badge>
+                                          )}
+                                          {talent.category && (
+                                            <Badge variant="secondary" className="capitalize">
+                                              {talent.category}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        {talent.description && (
+                                          <p className={`text-sm leading-relaxed ${isDashboardDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            {talent.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {talent.pricing && (
+                                      <div className={`self-start rounded-lg px-3 py-2 text-sm font-semibold shadow-sm ${isDashboardDarkMode ? 'bg-purple-500/20 text-purple-200 border border-purple-500/30' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>
+                                        {talent.pricing}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 gap-3 text-sm sm:max-w-xs">
+                                    {talent.location && (
+                                      <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 ${isDashboardDarkMode ? 'bg-gray-800/70 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                                        <MapPin className="h-4 w-4 flex-shrink-0" />
+                                        <span className="truncate">
+                                          {talent.location}
+                                          {talent.isRemote ? ' • Remote friendly' : ''}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {talent.availability && (
+                                      <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 ${isDashboardDarkMode ? 'bg-gray-800/70 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                                        <span>{talent.availability}</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-dashed pt-4 mt-4">
+                                  {talent.skills.length > 0 && (
+                                    <div className="space-y-2">
+                                      <p className={`text-xs font-semibold uppercase tracking-wide ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        Key Skills
+                                      </p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {talent.skills.slice(0, 5).map((skill: string) => (
+                                          <Badge key={skill} variant="outline" className="text-xs rounded-full px-3 py-1">
+                                            {skill}
+                                          </Badge>
+                                        ))}
+                                        {talent.skills.length > 5 && (
+                                          <Badge variant="outline" className="text-xs rounded-full px-3 py-1">
+                                            +{talent.skills.length - 5} more
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {talent.languages.length > 0 && (
+                                    <div className="space-y-2">
+                                      <p className={`text-xs font-semibold uppercase tracking-wide ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        Languages
+                                      </p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {talent.languages.map((language: string) => (
+                                          <Badge key={language} variant="secondary" className="text-xs capitalize rounded-full px-3 py-1">
+                                            {language}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {talent.createdAt && (
+                                  <div className={`text-xs flex items-center justify-end gap-2 ${isDashboardDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400/70" />
+                                    Updated {formatDate(talent.createdAt)}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div className="p-4">
-                              <h3 className={`font-semibold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                {item.title || 'Untitled'}
-                              </h3>
-                              <p className={`text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
-                                {item.description || 'No description'}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <Camera className={`h-12 w-12 mx-auto ${isDashboardDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-                        <h3 className={`mt-4 text-lg font-medium ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                          No portfolio items yet
-                        </h3>
-                        <p className={`mt-2 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {isOwnProfile 
-                            ? 'Start building your portfolio by adding your work.' 
-                            : 'This user hasn\'t added any portfolio items yet.'}
-                        </p>
-                        {isOwnProfile && (
-                          <Button className="mt-4">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Portfolio Item
-                          </Button>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      </section>
                     )}
                   </CardContent>
                 </Card>

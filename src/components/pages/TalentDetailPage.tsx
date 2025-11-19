@@ -130,7 +130,7 @@ export const TalentDetailPage: React.FC<TalentDetailPageProps> = ({
       <div className={`min-h-screen ${isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'} flex items-center justify-center`}>
         <div className="text-center">
           <h2 className="font-title text-xl mb-4">Talent not found</h2>
-          <Button onClick={() => router.push('/talent-marketplace')}>
+          <Button onClick={() => router.push('/marketplace/talent')}>
             Back to Talent Marketplace
           </Button>
         </div>
@@ -174,7 +174,7 @@ export const TalentDetailPage: React.FC<TalentDetailPageProps> = ({
           <div className="mb-6">
             <Button
               variant="ghost"
-              onClick={() => router.push('/dashboard/talent-marketplace')}
+              onClick={() => router.push('/dashboard/marketplace/talent')}
               className="flex items-center gap-2 mb-4"
             >
               <ArrowLeft className="h-4 w-4" />

@@ -17,7 +17,7 @@ import {
 export function Footer() {
   const marketplaces = [
     { name: 'Digital Assets', href: '/marketplace' },
-    { name: 'Talent Marketplace', href: '/talent-marketplace' },
+    { name: 'Talent Marketplace', href: '/marketplace/talent' },
     { name: 'Studio Spaces', href: '/studios' },
     { name: 'Event Tickets', href: '/tickets' }
   ];

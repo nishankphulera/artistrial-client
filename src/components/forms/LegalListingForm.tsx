@@ -12,6 +12,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { createListingCreationEvent } from '@/utils/userEvents';
+import { apiUrl } from '@/utils/api';
 
 interface LegalFormData {
   title: string;
@@ -341,7 +342,7 @@ export const LegalListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }
         timeline: service.timeline || null
       }));
 
-      const response = await fetch('http://localhost:5001/api/legal', {
+      const response = await fetch(apiUrl('legal'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

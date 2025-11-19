@@ -12,6 +12,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
+import { apiUrl } from '@/utils/api';
 
 interface TicketFormData {
   title: string;
@@ -317,7 +318,7 @@ export const TicketListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
         return;
       }
 
-      const response = await fetch('http://localhost:5001/api/tickets', {
+      const response = await fetch(apiUrl('tickets'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

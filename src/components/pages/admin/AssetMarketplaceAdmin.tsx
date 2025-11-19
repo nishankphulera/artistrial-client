@@ -417,7 +417,7 @@ export const AssetMarketplaceAdmin: React.FC<AssetMarketplaceAdminProps> = ({
 
                         <div className="flex items-center justify-between pt-3 border-t mt-auto">
                           <span className={`text-lg font-title text-[#FF8D28] ${isDashboardDarkMode ? 'text-[#FF8D28]' : ''}`}>
-                            {formatPriceINR(parseFloat(asset.price), true)}
+                            {formatPriceINR(Number(asset.price) || 0, true)}
                           </span>
                           <div className={`flex items-center gap-2 text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                             <Eye className="h-3 w-3" />

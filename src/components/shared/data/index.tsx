@@ -1,6 +1,16 @@
 // Unified Data Management System for Artistrial Marketplace
 // This file exports all marketplace data services and provides a centralized interface
 
+// Import for dynamic access in helper functions
+import { useTalentData, talentFilterConfig } from './TalentDataService';
+import { useStudioData, studioFilterConfig } from './StudioDataService';
+import { useInvestorData, investorFilterConfig } from './InvestorDataService';
+import { useEducationData, educationFilterConfig } from './EducationDataService';
+import { useLegalData, legalFilterConfig } from './LegalDataService';
+import { useProductData, productFilterConfig } from './ProductDataService';
+import { useTicketData, ticketFilterConfig } from './TicketDataService';
+import { fetchMarketplaceAssets } from '../MarketplaceData';
+
 // Individual Data Services
 export * from './TalentDataService';
 export * from './StudioDataService';
@@ -110,21 +120,21 @@ export const commonSortOptions = [
 export const getDataServiceHook = (moduleType: string) => {
   switch (moduleType) {
     case 'talent':
-      return require('./TalentDataService').useTalentData;
+      return useTalentData;
     case 'studios':
-      return require('./StudioDataService').useStudioData;
+      return useStudioData;
     case 'investors':
-      return require('./InvestorDataService').useInvestorData;
+      return useInvestorData;
     case 'education':
-      return require('./EducationDataService').useEducationData;
+      return useEducationData;
     case 'legal':
-      return require('./LegalDataService').useLegalData;
+      return useLegalData;
     case 'products':
-      return require('./ProductDataService').useProductData;
+      return useProductData;
     case 'tickets':
-      return require('./TicketDataService').useTicketData;
+      return useTicketData;
     case 'assets':
-      return require('../MarketplaceData').fetchMarketplaceAssets;
+      return fetchMarketplaceAssets;
     default:
       throw new Error(`Unknown module type: ${moduleType}`);
   }
@@ -134,19 +144,19 @@ export const getDataServiceHook = (moduleType: string) => {
 export const getFilterConfig = (moduleType: string) => {
   switch (moduleType) {
     case 'talent':
-      return require('./TalentDataService').talentFilterConfig;
+      return talentFilterConfig;
     case 'studios':
-      return require('./StudioDataService').studioFilterConfig;
+      return studioFilterConfig;
     case 'investors':
-      return require('./InvestorDataService').investorFilterConfig;
+      return investorFilterConfig;
     case 'education':
-      return require('./EducationDataService').educationFilterConfig;
+      return educationFilterConfig;
     case 'legal':
-      return require('./LegalDataService').legalFilterConfig;
+      return legalFilterConfig;
     case 'products':
-      return require('./ProductDataService').productFilterConfig;
+      return productFilterConfig;
     case 'tickets':
-      return require('./TicketDataService').ticketFilterConfig;
+      return ticketFilterConfig;
     default:
       throw new Error(`Unknown module type: ${moduleType}`);
   }

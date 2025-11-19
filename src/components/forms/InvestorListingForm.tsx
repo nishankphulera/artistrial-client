@@ -11,6 +11,7 @@ import { X, Plus, TrendingUp, DollarSign, Target, Users } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
+import { apiUrl } from '@/utils/api';
 
 interface InvestorFormData {
   company_name: string;
@@ -205,7 +206,7 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
         website_url: formData.website_url
       };
 
-      const response = await fetch('http://localhost:5001/api/investors', {
+      const response = await fetch(apiUrl('investors'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

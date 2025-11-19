@@ -20,9 +20,6 @@ import { UserProfileLink } from '@/components/shared/UserProfileLink';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 
-interface StudiosPageProps {
-  isDashboardDarkMode?: boolean;
-}
 
 // Mock data and functions to replace StudioDataService
 const mockStudios: Studio[] = [
@@ -81,7 +78,8 @@ const studioFilterConfig: FilterConfig = {
 };
 
 
-export default function StudiosPage({ isDashboardDarkMode = false }: StudiosPageProps) {
+export default function StudiosPage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const [studios, setStudios] = useState<Studio[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,7 +174,7 @@ export default function StudiosPage({ isDashboardDarkMode = false }: StudiosPage
           user.id,
           studioId,
           selectedStudio.name,
-          bookingForm.selectedDate,
+          bookingForm.selectedDate.toISOString().split('T')[0], // Convert Date to YYYY-MM-DD string
           bookingForm.startTime,
           bookingForm.endTime,
           selectedStudio.location || selectedStudio.address,

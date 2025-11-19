@@ -12,6 +12,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { uploadMultipleImagesToS3 } from '@/utils/s3Upload';
+import { apiUrl } from '@/utils/api';
 
 interface StudioFormData {
   title: string;
@@ -292,9 +293,8 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
         status: 'active'
       };
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
       const response = await fetch(
-        `${API_URL}/api/studios`,
+        apiUrl('studios'),
         {
           method: 'POST',
           headers: {

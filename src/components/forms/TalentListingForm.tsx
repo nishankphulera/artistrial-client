@@ -32,6 +32,7 @@ import { projectId } from '@/utils/supabase/info';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { createListingCreationEvent } from '@/utils/userEvents';
+import { apiUrl } from '@/utils/api';
 
 interface TalentFormData {
   title: string;
@@ -237,7 +238,7 @@ export const TalentListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
       console.log('Talent creation payload:', listingData);
 
       const response = await fetch(
-        `http://localhost:5001/api/talents`,
+        apiUrl('talents'),
         {
           method: 'POST',
           headers: {

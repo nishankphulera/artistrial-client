@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ArtistProfilePage } from './ArtistProfilePage';
+import { apiUrl } from '@/utils/api';
 
 interface ServiceModule {
   id: string;
@@ -92,8 +93,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
         }
         
         // Fetch user profile from server
-        let userProfileResponse = await fetch(
-          `http://localhost:5001/api/users/${effectiveUserId}`,
+        const userProfileResponse = await fetch(
+          apiUrl(`users/${effectiveUserId}`),
           { headers }
         );
 
@@ -105,13 +106,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ isDashboardDarkMode = 
           
           // Fetch user's assets
           const assetsResponse = await fetch(
-            `http://localhost:5001/api/assets/user/${effectiveUserId}`,
+            apiUrl(`assets/user/${effectiveUserId}`),
             { headers }
           );
           
           // Fetch user's talents
           const talentsResponse = await fetch(
-            `http://localhost:5001/api/talents/user/${effectiveUserId}`,
+            apiUrl(`talents/user/${effectiveUserId}`),
             { headers }
           );
           

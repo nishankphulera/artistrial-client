@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface ProductService {
   id: string;
@@ -224,7 +225,7 @@ export const useProductData = () => {
       }
 
       const response = await fetch(
-        `http://localhost:5001/api/product-services?${params}`,
+        `${apiUrl('product-services')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',

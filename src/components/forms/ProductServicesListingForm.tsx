@@ -12,6 +12,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
 import { BackToDashboard } from '../shared/BackToDashboard';
 import { createListingCreationEvent } from '@/utils/userEvents';
+import { apiUrl } from '@/utils/api';
 
 interface ProductServicesFormData {
   title: string;
@@ -244,7 +245,7 @@ export const ProductServicesListingForm: React.FC<{ onClose?: () => void }> = ({
       };
 
       const response = await fetch(
-        'http://localhost:5001/api/product-services',
+        apiUrl('product-services'),
         {
           method: 'POST',
           headers: {

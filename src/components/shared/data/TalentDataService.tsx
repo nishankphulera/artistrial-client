@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface TalentProfile {
   id: string;
@@ -184,7 +185,7 @@ export const useTalentData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/talents/search?${params}`,
+        `${apiUrl('talents/search')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',

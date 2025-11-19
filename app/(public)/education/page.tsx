@@ -20,6 +20,7 @@ import { UserProfileLink } from '@/components/shared/UserProfileLink';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
+import { apiUrl } from '@/utils/api';
 
 interface EducationItem {
   id: string;
@@ -44,18 +45,23 @@ interface EducationItem {
   next_start_date?: string;
 }
 
-interface EducationPageProps {
-  isDashboardDarkMode?: boolean;
+interface Review {
+  id: string;
+  user: string;
+  rating: number;
+  comment: string;
+  date: string;
 }
 
-export default function EducationPage({ isDashboardDarkMode = false }: EducationPageProps) {
+export default function EducationPage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const [courses, setCourses] = useState<EducationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateCourse, setShowCreateCourse] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<EducationItem | null>(null);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
-  const [reviews, setReviews] = useState([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
@@ -451,7 +457,7 @@ export default function EducationPage({ isDashboardDarkMode = false }: Education
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/education?${params}`,
+        `${apiUrl('education')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',

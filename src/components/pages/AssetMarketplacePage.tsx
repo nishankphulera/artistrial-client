@@ -10,6 +10,7 @@ import { AssetSearchFilters } from '../shared/AssetSearchFilters';
 import { UserProfileLink } from '../shared/UserProfileLink';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatPriceINR } from '@/utils/currency';
+import { apiUrl } from '@/utils/api';
 
 interface Asset {
   id: string;
@@ -100,7 +101,7 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
         if (!token) return;
 
         const response = await fetch(
-          `http://localhost:5001/api/cart/${user.id}`,
+          apiUrl(`cart/${user.id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -110,8 +111,10 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
 
         if (response.ok) {
           const data = await response.json();
-          const cartItemIds = new Set(
-            (data.cart?.items || []).map((item: any) => item.artwork_id?.toString())
+          const cartItemIds = new Set<string>(
+            (data.cart?.items || [])
+              .map((item: any) => item.artwork_id?.toString())
+              .filter((id: string | undefined): id is string => id !== undefined)
           );
           setCartItems(cartItemIds);
         }
@@ -143,7 +146,7 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
       params.append('status', 'active');
       params.append('limit', '50');
       
-      const response = await fetch(`http://localhost:5001/api/assets?${params}`);
+      const response = await fetch(`${apiUrl('assets')}?${params}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -189,7 +192,7 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
         const token = localStorage.getItem('access_token');
         if (token) {
           const response = await fetch(
-            `http://localhost:5001/api/cart/${user.id}`,
+            apiUrl(`cart/${user.id}`),
             {
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -198,8 +201,10 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
           );
           if (response.ok) {
             const data = await response.json();
-            const cartItemIds = new Set(
-              (data.cart?.items || []).map((item: any) => item.artwork_id?.toString())
+            const cartItemIds = new Set<string>(
+              (data.cart?.items || [])
+                .map((item: any) => item.artwork_id?.toString())
+                .filter((id: string | undefined): id is string => id !== undefined)
             );
             setCartItems(cartItemIds);
           }
@@ -233,7 +238,7 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
         const token = localStorage.getItem('access_token');
         if (token) {
           const response = await fetch(
-            `http://localhost:5001/api/cart/${user.id}`,
+            apiUrl(`cart/${user.id}`),
             {
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -242,8 +247,10 @@ export const AssetMarketplacePage: React.FC<AssetMarketplacePageProps> = ({
           );
           if (response.ok) {
             const data = await response.json();
-            const cartItemIds = new Set(
-              (data.cart?.items || []).map((item: any) => item.artwork_id?.toString())
+            const cartItemIds = new Set<string>(
+              (data.cart?.items || [])
+                .map((item: any) => item.artwork_id?.toString())
+                .filter((id: string | undefined): id is string => id !== undefined)
             );
             setCartItems(cartItemIds);
           }

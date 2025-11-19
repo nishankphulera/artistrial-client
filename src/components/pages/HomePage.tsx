@@ -25,6 +25,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { apiUrl } from '@/utils/api';
 
 interface FeaturedArtwork {
   id: string;
@@ -94,7 +95,7 @@ export const HomePage: React.FC = () => {
   const fetchPlatformStats = async () => {
     try {
       const response = await fetch(
-        `http://localhost:5001/api/stats`,
+        apiUrl('stats'),
         {
           headers: {
             'Content-Type': 'application/json',
@@ -123,7 +124,7 @@ export const HomePage: React.FC = () => {
       // Try to fetch real artworks from the local server
       try {
         const response = await fetch(
-          `http://localhost:5001/api/assets?limit=6&status=active`,
+          `${apiUrl('assets')}?limit=6&status=active`,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -206,7 +207,7 @@ export const HomePage: React.FC = () => {
       // Try to fetch real talent from the local server
       try {
         const response = await fetch(
-          `http://localhost:5001/api/talents?limit=3&status=active`,
+          `${apiUrl('talents')}?limit=3&status=active`,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -293,7 +294,7 @@ export const HomePage: React.FC = () => {
       // Try to fetch real studios from the local server
       try {
         const response = await fetch(
-          `http://localhost:5001/api/studios?limit=3`,
+          `${apiUrl('studios')}?limit=3`,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -389,7 +390,7 @@ export const HomePage: React.FC = () => {
       name: "Find Talent",
       description: "Hire creative professionals",
       icon: Search,
-      route: "/talent-marketplace",
+      route: "/marketplace/talent",
       color: "from-blue-500 to-cyan-600",
       bgColor: "bg-blue-50",
       iconColor: "text-blue-600",

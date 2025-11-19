@@ -24,6 +24,7 @@ import {
   TicketFilters,
   ticketFilterConfig
 } from '@/components/shared/data/TicketDataService';
+import { apiUrl } from '@/utils/api';
 
 interface Event {
   id: string;
@@ -60,11 +61,8 @@ interface TicketTier {
   benefits: string[];
 }
 
-interface TicketsPageProps {
-  isDashboardDarkMode?: boolean;
-}
-
-export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPageProps) {
+export default function TicketsPage() {
+  const isDashboardDarkMode = false; // You can get this from a theme context or hook if needed
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(false);
@@ -224,7 +222,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/tickets?${params}`,
+        `${apiUrl('tickets')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -298,7 +296,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(
-        `http://localhost:5001/api/tickets/purchase`,
+        apiUrl('tickets/purchase'),
         {
           method: 'POST',
           headers: {
@@ -548,7 +546,7 @@ export default function TicketsPage({ isDashboardDarkMode = false }: TicketsPage
                     className="w-full mt-6"
                     disabled={!selectedTier}
                   >
-                    Purchase for ${selectedEvent.ticket_tiers?.find(t => t.id === selectedTier)?.price! * ticketQuantity || 0}
+                    Purchase for ${(selectedEvent.ticket_tiers?.find(t => t.id === selectedTier)?.price ?? 0) * ticketQuantity}
                   </Button>
                 </div>
               </div>

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useAudioPlayer } from '@/components/providers/AudioPlayerProvider';
+import { apiUrl } from '@/utils/api';
 
 interface ArtistProfilePageProps {
   isDashboardDarkMode?: boolean;
@@ -91,56 +92,56 @@ export const ArtistProfilePage: React.FC<ArtistProfilePageProps> = ({ isDashboar
         }
         
         // Fetch user profile from server
-        let userProfileResponse = await fetch(
-          `http://localhost:5001/api/users/${targetUserId}`,
+        const userProfileResponse = await fetch(
+          apiUrl(`users/${targetUserId}`),
           { headers }
         );
         
         // Fetch user's assets
         const assetsResponse = await fetch(
-          `http://localhost:5001/api/assets/user/${targetUserId}`,
+          apiUrl(`assets/user/${targetUserId}`),
           { headers }
         );
         
         // Fetch user's talents
         const talentsResponse = await fetch(
-          `http://localhost:5001/api/talents/user/${targetUserId}`,
+          apiUrl(`talents/user/${targetUserId}`),
           { headers }
         );
         
         // Fetch user's tickets/events
         const ticketsResponse = await fetch(
-          `http://localhost:5001/api/tickets/user/${targetUserId}`,
+          apiUrl(`tickets/user/${targetUserId}`),
           { headers }
         );
         
         // Fetch user's original releases (OGs)
         const ogReleasesResponse = await fetch(
-          `http://localhost:5001/api/original-releases/user/${targetUserId}`,
+          apiUrl(`original-releases/user/${targetUserId}`),
           { headers, cache: 'no-store' }
         );
         
         // Fetch user's portfolio posts
         const portfolioPostsResponse = await fetch(
-          `http://localhost:5001/api/portfolio-posts/user/${targetUserId}`,
+          apiUrl(`portfolio-posts/user/${targetUserId}`),
           { headers, cache: 'no-store' }
         );
         
         // Fetch user's reviews
         const reviewsResponse = await fetch(
-          `http://localhost:5001/api/user-reviews/user/${targetUserId}`,
+          apiUrl(`user-reviews/user/${targetUserId}`),
           { headers, cache: 'no-store' }
         );
         
         // Fetch review statistics
         const reviewStatsResponse = await fetch(
-          `http://localhost:5001/api/user-reviews/user/${targetUserId}/stats`,
+          apiUrl(`user-reviews/user/${targetUserId}/stats`),
           { headers, cache: 'no-store' }
         );
         
         // Fetch follow statistics
         const followStatsResponse = await fetch(
-          `http://localhost:5001/api/user-follows/${targetUserId}/stats`,
+          apiUrl(`user-follows/${targetUserId}/stats`),
           { headers, cache: 'no-store' }
         );
         

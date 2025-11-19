@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface LegalService {
   id: string;
@@ -166,7 +167,7 @@ export const useLegalData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/legal?${params}`,
+        `${apiUrl('legal')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -246,14 +247,14 @@ export const useLegalData = () => {
       processedData = processedData.filter(lawyer =>
         lawyer.name.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
         lawyer.description.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
-        lawyer.specialization.some(spec => spec.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
+        lawyer.specialization.some((spec: string) => spec.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
       );
     }
 
     if (Array.isArray(filters.category) && filters.category.length > 0) {
       processedData = processedData.filter(lawyer =>
         filters.category!.some(category =>
-          lawyer.specialization.some(spec => spec.toLowerCase().includes(category.toLowerCase()))
+          lawyer.specialization.some((spec: string) => spec.toLowerCase().includes(category.toLowerCase()))
         )
       );
     }
@@ -316,7 +317,7 @@ export const useLegalData = () => {
   const fetchLegalStats = async (userId: string): Promise<any> => {
     try {
       const response = await fetch(
-        `http://localhost:5001/api/legal/user/${userId}`,
+        apiUrl(`legal/user/${userId}`),
         {
           headers: {
             'Content-Type': 'application/json',

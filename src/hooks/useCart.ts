@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiUrl } from '@/utils/api';
 
 interface CartItem {
   id: string;
@@ -39,7 +40,7 @@ export function useCart() {
       // Check if item already exists in cart before making API call
       try {
         const cartResponse = await fetch(
-          `http://localhost:5001/api/cart/${user.id}`,
+          apiUrl(`cart/${user.id}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -68,7 +69,7 @@ export function useCart() {
       }
 
       const response = await fetch(
-        `http://localhost:5001/api/cart/${user.id}/add`,
+        apiUrl(`cart/${user.id}/add`),
         {
           method: 'POST',
           headers: {
@@ -173,7 +174,7 @@ export function useCart() {
       }
 
       const response = await fetch(
-        `http://localhost:5001/api/cart/${user.id}/remove`,
+        apiUrl(`cart/${user.id}/remove`),
         {
           method: 'POST',
           headers: {

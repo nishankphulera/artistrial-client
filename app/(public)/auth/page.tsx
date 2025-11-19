@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { FcGoogle } from "react-icons/fc";
+import { apiUrl } from '@/utils/api';
 
 // Load Razorpay script dynamically
 declare global {
@@ -43,6 +44,8 @@ function AuthPageContent() {
   const [signupStep, setSignupStep] = useState<"subscription" | "form">("subscription");
   const [loading, setLoading] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [paymentVerified, setPaymentVerified] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState<{ orderId: string; razorpayOrderId: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [formData, setFormData] = useState({
@@ -119,172 +122,256 @@ function AuthPageContent() {
     return true;
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  e.stopPropagation();
+  const completeSignup = async (paymentInfo?: { orderId?: string; razorpayOrderId?: string }) => {
+    const userData = {
+      email: formData.email,
+      password: formData.password,
+      username: formData.username,
+      display_name: formData.fullName,
+      role: formData.profileType.toLowerCase(),
+      subscription_type: formData.subscriptionType,
+      bio: "",
+      avatar_url: "",
+    };
 
-  console.log('Form submitted, mode:', mode, 'signupStep:', signupStep);
-  console.log('Form data:', { ...formData, password: '***', confirmPassword: '***' });
+    console.log('Sending signup request with data:', { ...userData, password: '***' });
 
-  // Prevent double submission
-  if (loading || processingPayment) {
-    console.log('Already processing, ignoring duplicate submission');
-    return;
-  }
+    setLoading(true);
+    let signupSucceeded = false;
 
-  if (!validateForm()) {
-    console.log('Form validation failed');
-    return;
-  }
+    try {
+      const signupResult = await signUp(userData);
 
-  console.log('Form validation passed, starting submission');
-  setLoading(true);
-
-  try {
-    if (mode === "signin") {
-      const { error } = await signIn(formData.email, formData.password);
-      if (error) {
-        toast.error(error.message || "Failed to sign in");
-      } else {
-        toast.success("Signed in successfully!");
-        router.push("/dashboard");
-      }
-    } else {
-      console.log('Starting signup process...');
-      
-      // For paid plans, check if payment was completed
-      if (formData.subscriptionType !== 'free') {
-        console.log('Checking payment for paid plan:', formData.subscriptionType);
-        const pendingPayment = localStorage.getItem('pending_payment_order');
-        if (!pendingPayment) {
-          console.error('No pending payment found for paid plan');
-          toast.error('Please complete payment before creating your account');
-          setLoading(false);
-          return;
-        }
-
-        try {
-          const paymentData = JSON.parse(pendingPayment);
-          console.log('Payment data found:', paymentData);
-          
-          // Verify payment was completed
-          const verifyResponse = await fetch('http://localhost:5001/api/payments/order/' + paymentData.orderId, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-            },
-          });
-
-          if (!verifyResponse.ok) {
-            console.error('Payment verification failed:', verifyResponse.status);
-            toast.error('Payment verification required. Please complete payment first.');
-            setLoading(false);
-            return;
-          }
-
-          const orderData = await verifyResponse.json();
-          console.log('Order data:', orderData);
-          
-          if (orderData.data?.status !== 'completed') {
-            console.error('Payment not completed, status:', orderData.data?.status);
-            toast.error('Payment not completed. Please complete payment first.');
-            setLoading(false);
-            return;
-          }
-        } catch (error) {
-          console.error('Payment verification error:', error);
-          toast.error('Unable to verify payment. Please contact support.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Map your formData to backend fields
-      const userData = {
-        email: formData.email,
-        password: formData.password,
-        username: formData.username,
-        display_name: formData.fullName,
-        role: formData.profileType.toLowerCase(),
-        subscription_type: formData.subscriptionType,
-        bio: "",
-        avatar_url: "",
-      };
-
-      console.log('Sending signup request with data:', { ...userData, password: '***' });
-
-      // Pass as ONE object
-      const signupResult = await signUp(userData); // ✅ single object
-      
-      console.log('Signup result:', signupResult);
       if (signupResult.error) {
         console.error('Signup error:', signupResult.error);
         toast.error(signupResult.error.message || "Failed to create account");
-        setLoading(false);
-      } else {
-        console.log('Signup successful, processing post-signup tasks...');
-        // If payment was made before signup, link payment to newly created user
-        if (formData.subscriptionType !== 'free') {
-          const pendingPayment = localStorage.getItem('pending_payment_order');
-          if (pendingPayment) {
-            try {
-              const paymentData = JSON.parse(pendingPayment);
-              const token = localStorage.getItem('access_token');
-              
-              // Get user ID from stored user data
-              const storedUser = localStorage.getItem('user');
-              let newUserId = null;
-              if (storedUser) {
-                try {
-                  const userData = JSON.parse(storedUser);
-                  newUserId = userData.id;
-                } catch (e) {
-                  console.error('Error parsing user data:', e);
-                }
-              }
-              
-              if (newUserId && paymentData.razorpayOrderId && token) {
-                // Update payment order with user ID
-                const updateResponse = await fetch(
-                  `http://localhost:5001/api/payments/order/${paymentData.orderId}`,
-                  {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      userId: newUserId,
-                      razorpayOrderId: paymentData.razorpayOrderId,
-                      email: formData.email,
-                    }),
-                  }
-                );
+        return;
+      }
 
-                // Also update user subscription if payment was verified
-                if (updateResponse.ok) {
-                  // The subscription type should already be set during signup, but verify
-                  console.log('Payment linked to user successfully');
-                }
-              }
-              
-              localStorage.removeItem('pending_payment_order');
-            } catch (error) {
-              console.error('Error linking payment to user:', error);
-              // Don't fail signup if payment linking fails
+      if (paymentInfo?.orderId && paymentInfo?.razorpayOrderId) {
+        try {
+          const token = localStorage.getItem('access_token');
+          const storedUser = localStorage.getItem('user');
+          let newUserId: string | null = null;
+
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              newUserId = parsedUser?.id ?? null;
+            } catch (e) {
+              console.error('Error parsing user data from localStorage:', e);
             }
           }
+
+          if (newUserId && token) {
+            const updateResponse = await fetch(
+              apiUrl(`payments/order/${paymentInfo.orderId}`),
+              {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  userId: newUserId,
+                  razorpayOrderId: paymentInfo.razorpayOrderId,
+                  email: formData.email,
+                }),
+              }
+            );
+
+            if (updateResponse.ok) {
+              console.log('Payment linked to user successfully');
+            } else {
+              console.error('Failed to link payment to user:', updateResponse.status);
+            }
+          }
+        } catch (error) {
+          console.error('Error linking payment to user:', error);
         }
-        
-        toast.success("Account created successfully!");
-        router.push("/dashboard");
+      }
+
+      toast.success("Account created successfully!");
+      router.push("/dashboard");
+      signupSucceeded = true;
+    } catch (error) {
+      console.error('Unexpected error in completeSignup:', error);
+      toast.error(error instanceof Error ? error.message : "An unexpected error occurred");
+    } finally {
+      setLoading(false);
+      setProcessingPayment(false);
+      if (signupSucceeded) {
+        setPaymentVerified(false);
+        setPaymentDetails(null);
       }
     }
-  } catch (error) {
-    console.error('Unexpected error in handleSubmit:', error);
-    toast.error(error instanceof Error ? error.message : "An unexpected error occurred");
-    setLoading(false);
-  }
-};
+  };
+
+  const initiatePaymentFlow = async () => {
+    const selectedPlan = subscriptionPlans.find(p => p.id === formData.subscriptionType);
+
+    if (!formData.email) {
+      toast.error('Please enter your email address before proceeding to payment');
+      return;
+    }
+
+    if (!razorpayLoaded) {
+      toast.error('Payment gateway is loading. Please wait...');
+      return;
+    }
+
+    setProcessingPayment(true);
+
+    try {
+      const response = await fetch(apiUrl('payments/create-order'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.id || null,
+          subscriptionType: formData.subscriptionType,
+          email: formData.email,
+        }),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to create payment order';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // ignore parsing errors
+        }
+        throw new Error(errorMessage);
+      }
+
+      const paymentData = await response.json();
+      const { orderId, razorpayOrderId, keyId, amount, currency } = paymentData.data;
+
+      setPaymentDetails({ orderId, razorpayOrderId });
+
+      const options = {
+        key: keyId,
+        amount: amount * 100,
+        currency,
+        name: 'Artistrial',
+        description: `${selectedPlan?.name ?? 'Selected'} Subscription`,
+        order_id: razorpayOrderId,
+        handler: async (response: any) => {
+          try {
+            const verifyResponse = await fetch(apiUrl('payments/verify'), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                userId: user?.id || null,
+                email: formData.email,
+              }),
+            });
+
+            const verifyData = await verifyResponse.json();
+
+            if (verifyData.success) {
+              setPaymentVerified(true);
+              toast.success('Payment successful! Finishing your registration...');
+              await completeSignup({ orderId, razorpayOrderId });
+            } else {
+              toast.error(verifyData.message || 'Payment verification failed');
+            }
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            toast.error('Payment verification failed. Please contact support.');
+          } finally {
+            setProcessingPayment(false);
+          }
+        },
+        prefill: {
+          email: formData.email || '',
+          name: formData.fullName || '',
+        },
+        theme: {
+          color: '#FF8D28',
+        },
+        modal: {
+          ondismiss: async () => {
+            setProcessingPayment(false);
+            toast.info('Payment cancelled');
+            try {
+              await completeSignup();
+            } catch (error) {
+              console.error('Signup completion after payment cancellation failed:', error);
+            }
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      console.error('Payment initiation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to initiate payment');
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    console.log('Form submitted, mode:', mode, 'signupStep:', signupStep);
+    console.log('Form data:', { ...formData, password: '***', confirmPassword: '***' });
+
+    if (loading || processingPayment) {
+      console.log('Already processing, ignoring duplicate submission');
+      return;
+    }
+
+    if (!validateForm()) {
+      console.log('Form validation failed');
+      return;
+    }
+
+    console.log('Form validation passed, determining next action');
+
+    if (mode === "signin") {
+      console.log('Starting sign-in process...');
+      setLoading(true);
+      try {
+        const { error } = await signIn(formData.email, formData.password);
+        if (error) {
+          toast.error(error.message || "Failed to sign in");
+        } else {
+          toast.success("Signed in successfully!");
+          router.push("/dashboard");
+        }
+      } catch (error) {
+        console.error('Unexpected error during sign-in:', error);
+        toast.error(error instanceof Error ? error.message : "An unexpected error occurred");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (signupStep === "subscription") {
+      console.warn('Signup submitted while on subscription step. Redirecting to form.');
+      setSignupStep("form");
+      return;
+    }
+
+    if (formData.subscriptionType !== 'free' && !paymentVerified) {
+      console.log('Paid subscription selected; initiating payment flow before signup');
+      await initiatePaymentFlow();
+      return;
+    }
+
+    await completeSignup(paymentDetails ?? undefined);
+  };
 
 
   const switchMode = () => {
@@ -292,6 +379,8 @@ const handleSubmit = async (e: React.FormEvent) => {
     console.log('Switching mode from', mode, 'to', mode === "signin" ? "signup" : "signin");
     setLoading(false);
     setProcessingPayment(false);
+    setPaymentVerified(false);
+    setPaymentDetails(null);
     setMode(mode === "signin" ? "signup" : "signin");
     setSignupStep("subscription");
     setFormData({
@@ -391,122 +480,9 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   const handleSubscriptionSelect = (subscriptionType: SubscriptionType) => {
     setFormData(prev => ({ ...prev, subscriptionType }));
-  };
-
-  const handlePayment = async () => {
-    const selectedPlan = subscriptionPlans.find(p => p.id === formData.subscriptionType);
-    
-    // Free plan doesn't need payment
-    if (formData.subscriptionType === 'free') {
-      setSignupStep("form");
-      return;
-    }
-
-    // For paid plans, require email first
-    if (!formData.email) {
-      toast.error('Please enter your email address to proceed with payment');
-      return;
-    }
-
-    if (!razorpayLoaded) {
-      toast.error('Payment gateway is loading. Please wait...');
-      return;
-    }
-
-    setProcessingPayment(true);
-
-    try {
-      // Create payment order (no auth required for signup flow)
-      const response = await fetch('http://localhost:5001/api/payments/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user?.id || null, // Will be set after signup
-          subscriptionType: formData.subscriptionType,
-          email: formData.email, // For signup flow
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create payment order');
-      }
-
-      const paymentData = await response.json();
-
-      // Store payment order ID for later verification
-      localStorage.setItem('pending_payment_order', JSON.stringify({
-        orderId: paymentData.data.orderId,
-        razorpayOrderId: paymentData.data.razorpayOrderId,
-        subscriptionType: formData.subscriptionType,
-      }));
-
-      // Initialize Razorpay checkout
-      const options = {
-        key: paymentData.data.keyId,
-        amount: paymentData.data.amount * 100, // Convert to paise
-        currency: paymentData.data.currency,
-        name: 'Artistrial',
-        description: `${selectedPlan?.name} Subscription`,
-        order_id: paymentData.data.razorpayOrderId,
-        handler: async function (response: any) {
-          // Payment successful, verify payment
-          try {
-            // Verify payment (no auth required for signup flow)
-            const verifyResponse = await fetch('http://localhost:5001/api/payments/verify', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                userId: user?.id || null,
-                email: formData.email,
-              }),
-            });
-
-            const verifyData = await verifyResponse.json();
-
-            if (verifyData.success) {
-              toast.success('Payment successful! Proceeding to registration...');
-              localStorage.removeItem('pending_payment_order');
-              setSignupStep("form");
-            } else {
-              toast.error(verifyData.message || 'Payment verification failed');
-            }
-          } catch (error) {
-            console.error('Payment verification error:', error);
-            toast.error('Payment verification failed. Please contact support.');
-          } finally {
-            setProcessingPayment(false);
-          }
-        },
-        prefill: {
-          email: formData.email || '',
-          name: formData.fullName || '',
-        },
-        theme: {
-          color: '#FF8D28',
-        },
-        modal: {
-          ondismiss: function() {
-            setProcessingPayment(false);
-            toast.info('Payment cancelled');
-          }
-        }
-      };
-
-      const razorpay = new window.Razorpay(options);
-      razorpay.open();
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to initiate payment');
-      setProcessingPayment(false);
-    }
+    setPaymentVerified(false);
+    setPaymentDetails(null);
+    setSignupStep("form");
   };
 
   // Subscription selection step for signup
@@ -593,47 +569,10 @@ const handleSubmit = async (e: React.FormEvent) => {
           })}
         </div>
 
-        {/* Email input for paid plans */}
-        {formData.subscriptionType !== 'free' && (
-          <div className="max-w-md mx-auto mb-6">
-            <Label htmlFor="subscription-email" className="text-sm font-medium text-gray-700 mb-2 block">
-              Email Address (Required for payment)
-            </Label>
-            <Input
-              id="subscription-email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange("email", e.target.value)}
-              placeholder="Enter your email address"
-              className="w-full"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              We'll use this email for payment and account creation
-            </p>
-          </div>
-        )}
-
         <div className="text-center">
-          <Button 
-            className="mb-6 bg-[#FF8D28] hover:bg-[#FF8D28]/90"
-            onClick={handlePayment}
-            disabled={
-              !formData.subscriptionType || 
-              processingPayment || 
-              loading ||
-              (formData.subscriptionType !== 'free' && (!razorpayLoaded || !formData.email))
-            }
-          >
-            {processingPayment ? (
-              'Processing Payment...'
-            ) : formData.subscriptionType === 'free' ? (
-              `Continue with ${subscriptionPlans.find(p => p.id === formData.subscriptionType)?.name || 'Free Plan'}`
-            ) : (
-              `Pay & Continue with ${subscriptionPlans.find(p => p.id === formData.subscriptionType)?.name || 'Selected Plan'}`
-            )}
-          </Button>
-          
+          <p className="mb-6 text-sm text-gray-600">
+            Select a plan above to continue to the registration form.
+          </p>
           <p className="text-sm text-gray-600">
             Already have an account?{" "}
             <button
@@ -660,6 +599,9 @@ const handleSubmit = async (e: React.FormEvent) => {
           onClick={() => {
             if (mode === "signup" && signupStep === "form") {
               setSignupStep("subscription");
+              setPaymentVerified(false);
+              setPaymentDetails(null);
+              setProcessingPayment(false);
             } else {
               router.push("/");
             }
@@ -933,7 +875,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             <div className="mt-4">
               <button
                 type="button"
-                onClick={() => (window.location.href = "http://localhost:5001/auth/google")}
+                onClick={() => (window.location.href = `${apiUrl('').replace('/api', '')}/auth/google`)}
                 className="flex items-center justify-center w-full border border-gray-300 bg-white text-black rounded-md py-2 px-4 hover:bg-gray-100"
               >
                 <FcGoogle className="mr-2 w-5 h-5" />

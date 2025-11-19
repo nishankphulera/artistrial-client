@@ -13,12 +13,6 @@ import { UserProfileLink } from '@/components/shared/UserProfileLink';
 import { fetchMarketplaceAssets, mockCategories, mockTags } from '@/components/shared/MarketplaceData';
 import type { Asset } from '@/components/shared/MarketplaceData';
 
-interface AssetMarketplacePageProps {
-  onAddToCart?: (artworkId: string) => void;
-  cartItemCount?: number;
-  isDashboardDarkMode?: boolean;
-}
-
 export default function MarketplacePageRoute() {
   // Default props for the marketplace page when used as a standalone page
   const onAddToCart = undefined;

@@ -41,6 +41,7 @@ import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { toast } from 'sonner';
+import { apiUrl } from '@/utils/api';
 
 interface MyOGsPageProps {
   isDashboardDarkMode: boolean;
@@ -132,7 +133,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
         }
 
         const response = await fetch(
-          `http://localhost:5001/api/original-releases/user/${userId}`,
+          apiUrl(`original-releases/user/${userId}`),
           { 
             headers,
             cache: 'no-store' // Prevent caching
@@ -304,7 +305,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
         .filter(tag => tag.length > 0);
 
       const response = await fetch(
-        'http://localhost:5001/api/original-releases',
+        apiUrl('original-releases'),
         {
           method: 'POST',
           headers,
@@ -336,7 +337,7 @@ export function MyOGsPage({ isDashboardDarkMode }: MyOGsPageProps) {
         });
         // Refresh the list
         const fetchResponse = await fetch(
-          `http://localhost:5001/api/original-releases/user/${userId}`,
+          apiUrl(`original-releases/user/${userId}`),
           { headers }
         );
         if (fetchResponse.ok) {

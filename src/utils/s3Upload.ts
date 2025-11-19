@@ -1,6 +1,7 @@
 /**
  * Utility functions for uploading images to S3
  */
+import { apiUrl } from './api';
 
 /**
  * Upload a single image to S3
@@ -22,8 +23,7 @@ export const uploadImageToS3 = async (
     formData.append('image', file);
     formData.append('folder', folder);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-    const response = await fetch(`${API_URL}/api/upload/s3/image`, {
+    const response = await fetch(apiUrl('upload/s3/image'), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -74,8 +74,7 @@ export const uploadMultipleImagesToS3 = async (
     });
     formData.append('folder', folder);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-    const response = await fetch(`${API_URL}/api/upload/s3/images`, {
+    const response = await fetch(apiUrl('upload/s3/images'), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

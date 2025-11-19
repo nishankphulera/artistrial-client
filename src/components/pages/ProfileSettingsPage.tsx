@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { apiUrl } from '@/utils/api';
 
 interface ProfileFormData {
   username: string;
@@ -148,8 +149,8 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
         
         // Fetch both user data and user profile data
         const [userResponse, profileResponse] = await Promise.all([
-          fetch(`http://localhost:5001/api/users/${userId}`, { headers }),
-          fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, { headers })
+          fetch(apiUrl(`users/${userId}`), { headers }),
+          fetch(apiUrl(`user-profiles/user/${userId}`), { headers })
         ]);
 
         if (userResponse.ok) {
@@ -321,7 +322,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
       };
       
       // Update user first
-      const userResponse = await fetch(`http://localhost:5001/api/users/${userId}`, {
+      const userResponse = await fetch(apiUrl(`users/${userId}`), {
         method: 'PUT',
         headers,
         body: JSON.stringify(userUpdateData)
@@ -335,7 +336,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
       }
 
       // Check if profile exists, then update or create
-      const checkProfileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+      const checkProfileResponse = await fetch(apiUrl(`user-profiles/user/${userId}`), {
         method: 'GET',
         headers
       });
@@ -343,14 +344,14 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
       let profileResponse;
       if (checkProfileResponse.ok) {
         // Profile exists, update it
-        profileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+        profileResponse = await fetch(apiUrl(`user-profiles/user/${userId}`), {
           method: 'PUT',
           headers,
           body: JSON.stringify(profileUpdateData)
         });
       } else {
         // Profile doesn't exist, create it
-        profileResponse = await fetch(`http://localhost:5001/api/user-profiles/user/${userId}`, {
+        profileResponse = await fetch(apiUrl(`user-profiles/user/${userId}`), {
           method: 'POST',
           headers,
           body: JSON.stringify(profileUpdateData)
@@ -407,7 +408,7 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
       }
       
       const response = await fetch(
-        `http://localhost:5001/api/user-profiles/user/${userId}/kyc`,
+        apiUrl(`user-profiles/user/${userId}/kyc`),
         {
           method: 'POST',
           headers,

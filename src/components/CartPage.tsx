@@ -7,6 +7,7 @@ import { Trash2, ShoppingCart, MapPin } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import { formatPriceINR } from '@/utils/currency';
+import { apiUrl } from '@/utils/api';
 
 interface CartItem {
   artwork_id: string;
@@ -65,7 +66,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       console.log('Fetching cart for user:', userId);
       
       const response = await fetch(
-        `http://localhost:5001/api/cart/${userId}`,
+        apiUrl(`cart/${userId}`),
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -104,7 +105,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       const token = localStorage.getItem('access_token');
       
       const response = await fetch(
-        `http://localhost:5001/api/cart/${userId}/quantity`,
+        apiUrl(`cart/${userId}/quantity`),
         {
           method: 'PUT',
           headers: {
@@ -135,7 +136,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       const token = localStorage.getItem('access_token');
       
       const response = await fetch(
-        `http://localhost:5001/api/cart/${userId}/remove`,
+        apiUrl(`cart/${userId}/remove`),
         {
           method: 'POST',
           headers: {
@@ -179,7 +180,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       const token = localStorage.getItem('access_token');
       
       const response = await fetch(
-        `http://localhost:5001/api/cart/${userId}/clear`,
+        apiUrl(`cart/${userId}/clear`),
         {
           method: 'POST',
           headers: {
@@ -213,7 +214,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
       if (!item.image_url || item.image_url.trim() === '') {
         try {
           const response = await fetch(
-            `http://localhost:5001/api/assets/${item.artwork_id}`,
+            apiUrl(`assets/${item.artwork_id}`),
             {
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -257,7 +258,7 @@ export function CartPage({ userId, onProceedToCheckout, isDashboardDarkMode = fa
     return enriched?.artistName || item.artist_name || 'Unknown Artist';
   };
 
-  const getItemCategory = (item: CartItem): string => {
+  const getItemCategory = (item: CartItem): string | null => {
     const enriched = enrichedItems.get(item.artwork_id);
     // Only show category if it's meaningful (not file format like png, jpg)
     const category = enriched?.category;

@@ -7,6 +7,7 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { CreditCard, Lock, CheckCircle, ArrowLeft } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { apiUrl } from '@/utils/api';
 
 interface CartItem {
   artwork_id: string;
@@ -157,7 +158,7 @@ export function CheckoutPage({ cart, userId, onPaymentComplete, onBack }: Checko
 
       // Checkout cart and create order
       const checkoutResponse = await fetch(
-        `http://localhost:5001/api/cart/${userId}/checkout`,
+        apiUrl(`cart/${userId}/checkout`),
         {
           method: 'POST',
           headers: {

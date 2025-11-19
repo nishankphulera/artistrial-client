@@ -30,6 +30,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { Studio } from '../shared/StudioCard';
 import { formatPriceINR } from '@/utils/currency';
 import { toast } from 'sonner';
+import { apiUrl } from '@/utils/api';
 
 interface StudioDetailPageProps {
   isDashboardDarkMode?: boolean;
@@ -71,8 +72,7 @@ export const StudioDetailPage: React.FC<StudioDetailPageProps> = ({
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/studios/${id}`, {
+      const response = await fetch(apiUrl(`studios/${id}`), {
         headers,
       });
 

@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface Studio {
   id: string;
@@ -169,7 +170,7 @@ export const useStudioData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/studios?${params}`,
+        `${apiUrl('studios')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -211,7 +212,7 @@ export const useStudioData = () => {
       features: Array.isArray(studio.amenities) ? studio.amenities : [],
       amenities: Array.isArray(studio.amenities) ? studio.amenities : [],
       images: Array.isArray(studio.images) ? studio.images : [],
-      availability: studio.status === 'active' ? 'Available' : 'Limited',
+      availability: (studio.status === 'active' ? 'Available' : studio.status === 'booked' ? 'Booked' : 'Limited') as 'Available' | 'Limited' | 'Booked',
       rating: studio.rating || 0,
       total_reviews: studio.total_reviews || 0,
       description: studio.description || '',
@@ -249,7 +250,7 @@ export const useStudioData = () => {
       processedData = processedData.filter(studio =>
         studio.name.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
         studio.description.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
-        studio.equipment.some(eq => eq.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
+        studio.equipment.some((eq: string) => eq.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
       );
     }
 
@@ -327,7 +328,7 @@ export const useStudioData = () => {
   const fetchStudioStats = async (userId: string): Promise<any> => {
     try {
       const response = await fetch(
-        `http://localhost:5001/api/studios/stats/${userId}`,
+        apiUrl(`studios/stats/${userId}`),
         {
           headers: {
             'Content-Type': 'application/json',

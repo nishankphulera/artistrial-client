@@ -1,6 +1,7 @@
 /**
  * Utility functions for creating user events in the system
  */
+import { apiUrl } from '@/utils/api';
 
 export interface CreateEventParams {
   user_id: number | string;
@@ -81,7 +82,7 @@ export const createUserEvent = async (params: CreateEventParams): Promise<boolea
       tags: params.tags || []
     };
 
-    const response = await fetch('http://localhost:5001/api/user-events', {
+    const response = await fetch(apiUrl('user-events'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -186,9 +187,9 @@ export const createStudioBookingEvent = async (
     priority: 'high',
     status: 'upcoming',
     start_date: booking_date,
-    start_time: start_time || null,
-    end_time: end_time || null,
-    location: location || null,
+    start_time: start_time ?? undefined,
+    end_time: end_time ?? undefined,
+    location: location ?? undefined,
     tags: ['studio', 'booking', 'session'],
     metadata: {
       action: 'studio_booking',
@@ -289,8 +290,8 @@ export const createMeetingEvent = async (
     status: 'upcoming',
     start_date: meeting_date,
     start_time,
-    end_time: end_time || null,
-    location: location || null,
+    end_time: end_time ?? undefined,
+    location: location ?? undefined,
     participants: participants || [],
     reminder_enabled: true,
     reminder_minutes_before: 60, // 1 hour before

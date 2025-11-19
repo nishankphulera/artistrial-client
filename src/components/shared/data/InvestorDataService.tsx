@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '@/utils/supabase/info';
+import { apiUrl } from '@/utils/api';
 
 export interface InvestorProfile {
   id: string;
@@ -130,7 +131,7 @@ export const useInvestorData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/investors?${params}`,
+        `${apiUrl('investors')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -207,14 +208,14 @@ export const useInvestorData = () => {
       processedData = processedData.filter(investor =>
         investor.name.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
         investor.bio.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
-        investor.focus.some(focus => focus.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
+        investor.focus.some((focus: string) => focus.toLowerCase().includes(filters.searchTerm!.toLowerCase()))
       );
     }
 
     if (Array.isArray(filters.category) && filters.category.length > 0) {
       processedData = processedData.filter(investor =>
         filters.category!.some(category =>
-          investor.focus.some(focus => focus.toLowerCase().includes(category.toLowerCase()))
+          investor.focus.some((focus: string) => focus.toLowerCase().includes(category.toLowerCase()))
         )
       );
     }
@@ -268,7 +269,7 @@ export const useInvestorData = () => {
   const fetchInvestorStats = async (userId: string): Promise<any> => {
     try {
       const response = await fetch(
-        `http://localhost:5001/api/investors/user/${userId}`,
+        apiUrl(`investors/user/${userId}`),
         {
           headers: {
             'Content-Type': 'application/json',

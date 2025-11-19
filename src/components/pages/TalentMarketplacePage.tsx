@@ -18,6 +18,7 @@ import { FeaturedListings } from '@/components/shared/FeaturedListings';
 import { FeaturedArtists } from '@/components/shared/FeaturedArtists';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { CREATE_ROUTES } from '@/utils/routes';
+import { apiUrl } from '@/utils/api';
 
 interface TalentProfile {
   id: number;
@@ -131,7 +132,7 @@ export function TalentMarketplacePage({
       params.append('status', 'active');
       params.append('limit', '50');
 
-      const response = await fetch(`http://localhost:5001/api/talents?${params}`);
+      const response = await fetch(`${apiUrl('talents')}?${params}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -146,7 +147,7 @@ export function TalentMarketplacePage({
     }
   };
 
-  const handleBookTalent = (talent: TalentProfile) => {
+  const handleBookTalent = (talent: any) => {
     if (!user) {
       alert('Please sign in to book talent');
       return;
@@ -421,16 +422,38 @@ export function TalentMarketplacePage({
               ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
               : "space-y-4"
             }>
-              {sortedTalents.map((talent) => (
-                <TalentCard
-                  key={talent.id}
-                  talent={talent}
-                  isDashboardDarkMode={isDashboardDarkMode}
-                  onBookTalent={handleBookTalent}
-                  viewMode={viewMode}
-                  hideContactButton={true}
-                />
-              ))}
+              {sortedTalents.map((talent) => {
+                // Transform API talent format to TalentCard format
+                const transformedTalent = {
+                  id: talent.id.toString(),
+                  name: talent.display_name || talent.username || 'Unknown',
+                  profession: talent.category || talent.title || 'Creative Professional',
+                  location: talent.location || 'Remote',
+                  rating: 4.5, // Default rating, can be fetched from API if available
+                  hourlyRate: talent.hourly_rate || talent.fixed_price || 0,
+                  skills: talent.skills || [],
+                  experience: talent.experience || 'Not specified',
+                  avatar: talent.avatar_url || '/api/placeholder/150/150',
+                  availability: (talent.availability === 'available' ? 'Available' : talent.availability === 'busy' ? 'Busy' : 'Booked') as 'Available' | 'Busy' | 'Booked',
+                  portfolio: talent.portfolio_urls || [],
+                  bio: talent.description || '',
+                  totalReviews: 0, // Can be fetched from API if available
+                  totalProjects: 0, // Can be fetched from API if available
+                  responseTime: talent.delivery_time || 'Not specified',
+                  userId: talent.user_id?.toString(),
+                  user_id: talent.user_id,
+                };
+                return (
+                  <TalentCard
+                    key={talent.id}
+                    talent={transformedTalent}
+                    isDashboardDarkMode={isDashboardDarkMode}
+                    onBookTalent={handleBookTalent}
+                    viewMode={viewMode}
+                    hideContactButton={true}
+                  />
+                );
+              })}
             </div>
 
             {/* Empty state */}

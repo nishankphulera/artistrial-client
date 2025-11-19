@@ -1,4 +1,5 @@
 // Removed Supabase import - using local API instead
+import { apiUrl } from '@/utils/api';
 
 export interface EducationListing {
   id: string;
@@ -203,7 +204,7 @@ export const useEducationData = () => {
       if (filters.sortBy) params.append('sort', filters.sortBy);
 
       const response = await fetch(
-        `http://localhost:5001/api/education?${params}`,
+        `${apiUrl('education')}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',

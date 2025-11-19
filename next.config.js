@@ -3,7 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   transpilePackages: ['lucide-react'],
-  output: 'standalone', // For Docker deployment
+  // Only use 'standalone' output when building for Docker
+  // For PM2 deployment, remove this line or set to undefined
+  output: process.env.NEXT_STANDALONE === 'true' ? 'standalone' : undefined,
   images: {
     domains: [
       'localhost',

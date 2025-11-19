@@ -7,6 +7,7 @@ import { Menu, X, Settings, ShoppingCart, LayoutDashboard } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { apiUrl } from '@/utils/api';
 
 export const Navigation: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -28,7 +29,7 @@ export const Navigation: React.FC = () => {
     try {
       const token = localStorage.getItem("access_token");
       const response = await fetch(
-        `http://localhost:5001/api/cart/${user.id}`,
+        apiUrl(`cart/${user.id}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,

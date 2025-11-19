@@ -19,6 +19,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { ProductAndServicesListingForm } from '../forms/ProductAndServicesListingForm';
 import { useRouter } from 'next/navigation';
+import { apiUrl } from '@/utils/api';
 
 // Mock data and functions until the data service is restored
 const sampleProducts: ProductService[] = [
@@ -176,8 +177,8 @@ export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServ
       
       // Use search endpoint if there's a search term
       const endpoint = filters.searchTerm 
-        ? 'http://localhost:5001/api/product-services/search'
-        : 'http://localhost:5001/api/product-services';
+        ? apiUrl('product-services/search')
+        : apiUrl('product-services');
       
       if (filters.searchTerm) params.append('q', filters.searchTerm);
       if (Array.isArray(filters.category) && filters.category.length > 0) {

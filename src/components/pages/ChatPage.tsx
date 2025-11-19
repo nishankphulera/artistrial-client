@@ -1,9 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+'use client'
+
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { 
   MessageSquare, 
   Send, 
   Search, 
-  Users, 
   Check,
   MoreVertical,
   Phone,
@@ -12,18 +19,13 @@ import {
   Paperclip,
   Smile,
   Circle,
-  Clock,
   CheckCheck,
   Settings,
-  Filter,
-  Bell,
   BellOff,
   Archive,
-  Trash2,
-  Star,
   Pin,
   Image,
-  File
+  Loader2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -33,9 +35,21 @@ import { Badge } from '@/components/ui/badge';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { io, Socket } from 'socket.io-client';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { apiUrl, API_URL } from '@/utils/api';
 
 interface ChatPageProps {
   isDashboardDarkMode?: boolean;
@@ -64,192 +78,915 @@ interface Conversation {
   isPinned: boolean;
   isArchived: boolean;
   isMuted: boolean;
-  messages: Message[];
 }
 
+interface ApiParticipant {
+  userId: number;
+  displayName: string | null;
+  username: string;
+  avatarUrl: string | null;
+  role: string;
+  isPinned: boolean;
+  isMuted: boolean;
+  isArchived: boolean;
+  lastReadAt: string | null;
+  lastReadMessageId: string | null;
+  status: 'online' | 'away' | 'offline';
+}
 
+interface ApiMessage {
+  id: string;
+  conversationId: string;
+  senderId: number;
+  content: string | null;
+  contentType: string;
+  mediaUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  readBy: number[];
+  status: 'sent' | 'delivered' | 'read';
+}
 
-const mockConversations: Conversation[] = [
-  {
-    id: '1',
-    participantId: 'user1',
-    participantName: 'Emma Wilson',
-    participantAvatar: 'https://images.unsplash.com/photo-1494790108755-2616b612d0bd?w=40&h=40&fit=crop&crop=face',
-    participantStatus: 'online',
-    lastMessage: 'Thanks for the artwork! It looks amazing.',
-    lastMessageTime: '2 min ago',
-    unreadCount: 2,
-    isPinned: true,
-    isArchived: false,
-    isMuted: false,
-    messages: [
-      {
-        id: 'm1',
-        senderId: 'user1',
-        senderName: 'Emma Wilson',
-        content: 'Hi! I\'m interested in your digital art collection.',
-        timestamp: '10:30 AM',
-        type: 'text',
-        status: 'read',
-        isOwn: false
-      },
-      {
-        id: 'm2',
-        senderId: 'current-user',
-        senderName: 'You',
-        content: 'Hello Emma! Thanks for your interest. Which pieces caught your attention?',
-        timestamp: '10:35 AM',
-        type: 'text',
-        status: 'read',
-        isOwn: true
-      },
-      {
-        id: 'm3',
-        senderId: 'user1',
-        senderName: 'Emma Wilson',
-        content: 'The abstract series with the vibrant colors. Could we discuss pricing?',
-        timestamp: '10:40 AM',
-        type: 'text',
-        status: 'read',
-        isOwn: false
-      },
-      {
-        id: 'm4',
-        senderId: 'current-user',
-        senderName: 'You',
-        content: 'Absolutely! I\'ll send you the details.',
-        timestamp: '10:42 AM',
-        type: 'text',
-        status: 'delivered',
-        isOwn: true
-      },
-      {
-        id: 'm5',
-        senderId: 'user1',
-        senderName: 'Emma Wilson',
-        content: 'Thanks for the artwork! It looks amazing.',
-        timestamp: '2 min ago',
-        type: 'text',
-        status: 'sent',
-        isOwn: false
-      }
-    ]
-  },
-  {
-    id: '2',
-    participantId: 'user2',
-    participantName: 'Creative Agency LLC',
-    participantAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-    participantStatus: 'away',
-    lastMessage: 'Perfect! When can we schedule the consultation?',
-    lastMessageTime: '1 hour ago',
-    unreadCount: 0,
-    isPinned: false,
-    isArchived: false,
-    isMuted: false,
-    messages: [
-      {
-        id: 'm6',
-        senderId: 'user2',
-        senderName: 'Creative Agency LLC',
-        content: 'We need a brand designer for our new project.',
-        timestamp: '9:15 AM',
-        type: 'text',
-        status: 'read',
-        isOwn: false
-      },
-      {
-        id: 'm7',
-        senderId: 'current-user',
-        senderName: 'You',
-        content: 'I\'d be happy to help! What\'s the scope of the project?',
-        timestamp: '9:20 AM',
-        type: 'text',
-        status: 'read',
-        isOwn: true
-      }
-    ]
-  },
-  {
-    id: '3',
-    participantId: 'user3',
-    participantName: 'Tech Startup Inc.',
-    participantAvatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=40&h=40&fit=crop&crop=face',
-    participantStatus: 'offline',
-    lastMessage: 'Looking forward to working with you!',
-    lastMessageTime: '3 hours ago',
-    unreadCount: 1,
-    isPinned: false,
-    isArchived: false,
-    isMuted: true,
-    messages: []
-  },
-  {
-    id: '4',
-    participantId: 'user4',
-    participantName: 'Sarah Martinez',
-    participantAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&crop=face',
-    participantStatus: 'online',
-    lastMessage: 'Studio booking confirmed for next week.',
-    lastMessageTime: '1 day ago',
-    unreadCount: 0,
-    isPinned: false,
-    isArchived: false,
-    isMuted: false,
-    messages: []
+interface ApiConversation {
+  id: string;
+  isGroup: boolean;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  unreadCount: number;
+  lastMessage: ApiMessage | null;
+  participants: ApiParticipant[];
+  settings: {
+    isPinned: boolean;
+    isMuted: boolean;
+    isArchived: boolean;
+    lastReadAt: string | null;
+    lastReadMessageId: string | null;
+  };
+}
+
+type PresenceStatus = 'online' | 'away' | 'offline';
+
+interface SearchUserResult {
+  id: number;
+  username: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
+  fullName: string | null;
+}
+
+interface ViewConversation extends Conversation {
+  updatedAt: string;
+  participants: ApiParticipant[];
+  settings: ApiConversation['settings'];
+  isGroup: boolean;
+  title: string | null;
+}
+
+interface ViewMessage extends Message {
+  createdAt: string;
+}
+
+// API_URL removed - using apiUrl() utility instead
+
+const formatRelativeTime = (dateString?: string | null) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes === 1) return '1 min ago';
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffHours === 1) return '1 hour ago';
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+};
+
+const formatTimestamp = (dateString: string) => {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const selectPrimaryParticipant = (
+  conversation: ApiConversation,
+  currentUserId: number
+) => {
+  if (conversation.isGroup) return null;
+  return (
+    conversation.participants.find(
+      (participant) => participant.userId !== currentUserId
+    ) ?? null
+  );
+};
+
+const deriveParticipantStatus = (
+  conversation: ApiConversation,
+  currentUserId: number
+): PresenceStatus => {
+  if (!conversation.isGroup) {
+    return (
+      selectPrimaryParticipant(conversation, currentUserId)?.status ?? 'offline'
+    );
   }
-];
 
+  if (
+    conversation.participants.some(
+      (participant) =>
+        participant.userId !== currentUserId && participant.status === 'online'
+    )
+  ) {
+    return 'online';
+  }
 
+  if (
+    conversation.participants.some(
+      (participant) =>
+        participant.userId !== currentUserId && participant.status === 'away'
+    )
+  ) {
+    return 'away';
+  }
+
+  return 'offline';
+};
+
+const mapConversationToView = (
+  conversation: ApiConversation,
+  currentUserId: number
+): ViewConversation => {
+  const primaryParticipant = selectPrimaryParticipant(
+    conversation,
+    currentUserId
+  );
+
+  const participantName = conversation.isGroup
+    ? conversation.title ||
+      conversation.participants
+        .filter((participant) => participant.userId !== currentUserId)
+        .map(
+          (participant) => participant.displayName || participant.username
+        )
+        .join(', ') ||
+      'Group Conversation'
+    : primaryParticipant?.displayName ||
+      primaryParticipant?.username ||
+      'Conversation';
+
+  const participantAvatar = conversation.isGroup
+    ? undefined
+    : primaryParticipant?.avatarUrl || undefined;
+
+  const lastMessagePreview = conversation.lastMessage
+    ? conversation.lastMessage.content?.trim() ||
+      (conversation.lastMessage.mediaUrl ? '[Attachment]' : '')
+    : 'Start the conversation';
+
+  const lastMessageTime = conversation.lastMessage
+    ? formatRelativeTime(conversation.lastMessage.createdAt)
+    : '';
+
+  return {
+    id: conversation.id,
+    participantId: String(primaryParticipant?.userId ?? conversation.id),
+    participantName,
+    participantAvatar,
+    participantStatus: deriveParticipantStatus(conversation, currentUserId),
+    lastMessage: lastMessagePreview,
+    lastMessageTime,
+    unreadCount: conversation.unreadCount,
+    isPinned: conversation.settings.isPinned,
+    isArchived: conversation.settings.isArchived,
+    isMuted: conversation.settings.isMuted,
+    updatedAt: conversation.updatedAt,
+    participants: conversation.participants,
+    settings: conversation.settings,
+    isGroup: conversation.isGroup,
+    title: conversation.title,
+  };
+};
+
+const mapMessageToView = (
+  apiMessage: ApiMessage,
+  conversation: ApiConversation,
+  currentUserId: number
+): ViewMessage => {
+  const senderParticipant = conversation.participants.find(
+    (participant) => participant.userId === apiMessage.senderId
+  );
+
+  const isOwn = apiMessage.senderId === currentUserId;
+
+  let messageType: 'text' | 'image' | 'file' = 'text';
+  if (apiMessage.contentType === 'image') messageType = 'image';
+  if (apiMessage.contentType === 'file') messageType = 'file';
+
+  return {
+    id: apiMessage.id,
+    senderId: String(apiMessage.senderId),
+    senderName: isOwn
+      ? 'You'
+      : senderParticipant?.displayName ||
+        senderParticipant?.username ||
+        'User',
+    content:
+      apiMessage.content ??
+      (apiMessage.mediaUrl ? 'Sent an attachment' : 'Message'),
+    timestamp: formatTimestamp(apiMessage.createdAt),
+    type: messageType,
+    status: apiMessage.status,
+    isOwn,
+    createdAt: apiMessage.createdAt,
+  };
+};
+
+const sortConversations = (conversations: ViewConversation[]) =>
+  [...conversations].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
 
 export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
+  const { user } = useAuth();
 
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(conversations[0]);
+  const [conversationSummaries, setConversationSummaries] = useState<
+    Record<string, ApiConversation>
+  >({});
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newMessage, setNewMessage] = useState('');
+  const [messagesMap, setMessagesMap] = useState<
+    Record<string, ViewMessage[]>
+  >({});
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [isNewConversationOpen, setIsNewConversationOpen] = useState(false);
+  const [finderQuery, setFinderQuery] = useState('');
+  const [finderResults, setFinderResults] = useState<SearchUserResult[]>([]);
+  const [finderLoading, setFinderLoading] = useState(false);
+  const [finderError, setFinderError] = useState<string | null>(null);
+  const [creatingConversationFor, setCreatingConversationFor] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const tokenRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
+  const messagesMapRef = useRef<Record<string, ViewMessage[]>>({});
+  const conversationSummariesRef = useRef<Record<string, ApiConversation>>({});
+  const selectedConversationIdRef = useRef<string | null>(null);
+  const finderInputRef = useRef<HTMLInputElement | null>(null);
+  const finderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
-  };
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+      inline: 'nearest',
+    });
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [selectedConversation?.messages]);
+    messagesMapRef.current = messagesMap;
+  }, [messagesMap]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedConversation) return;
+  useEffect(() => {
+    conversationSummariesRef.current = conversationSummaries;
+  }, [conversationSummaries]);
 
-    const message: Message = {
-      id: `m${Date.now()}`,
-      senderId: 'current-user',
+  useEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
+
+  const conversationList: ViewConversation[] = useMemo(() => {
+    if (!user?.id) return [];
+    const list = Object.values(conversationSummaries).map((summary) =>
+      mapConversationToView(summary, user.id)
+    );
+    return sortConversations(list);
+  }, [conversationSummaries, user?.id]);
+
+  useEffect(() => {
+    if (!selectedConversationId && conversationList.length > 0) {
+      setSelectedConversationId(conversationList[0].id);
+    }
+    if (
+      selectedConversationId &&
+      !conversationSummaries[selectedConversationId]
+    ) {
+      setSelectedConversationId(conversationList[0]?.id ?? null);
+    }
+  }, [conversationList, selectedConversationId, conversationSummaries]);
+
+  const selectedConversationSummary = selectedConversationId
+    ? conversationSummaries[selectedConversationId] ?? null
+    : null;
+
+  const selectedConversationView =
+    selectedConversationSummary && user?.id
+      ? mapConversationToView(selectedConversationSummary, user.id)
+      : null;
+
+  const conversationMessages = selectedConversationId
+    ? messagesMap[selectedConversationId] ?? []
+    : [];
+
+  useEffect(() => {
+    if (conversationMessages.length > 0) {
+      scrollToBottom();
+    }
+  }, [conversationMessages, scrollToBottom]);
+
+  const getDirectConversationWith = useCallback(
+    (targetUserId: number) => {
+      const conversations = conversationSummariesRef.current;
+      return Object.values(conversations).find(
+        (conversation) =>
+          !conversation.isGroup &&
+          conversation.participants.some(
+            (participant) => participant.userId === targetUserId
+          )
+      );
+    },
+    []
+  );
+
+  const resetFinderState = useCallback(() => {
+    setFinderQuery('');
+    setFinderResults([]);
+    setFinderError(null);
+    setFinderLoading(false);
+    setCreatingConversationFor(null);
+    if (finderDebounceRef.current) {
+      clearTimeout(finderDebounceRef.current);
+      finderDebounceRef.current = null;
+    }
+  }, []);
+
+  const handleNewConversationOpenChange = useCallback(
+    (open: boolean) => {
+      setIsNewConversationOpen(open);
+      if (!open) {
+        resetFinderState();
+      }
+    },
+    [resetFinderState]
+  );
+
+  useEffect(() => {
+    if (isNewConversationOpen) {
+      const timeoutId = setTimeout(() => {
+        finderInputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [isNewConversationOpen]);
+
+  useEffect(() => {
+    if (!isNewConversationOpen) return;
+
+    if (finderDebounceRef.current) {
+      clearTimeout(finderDebounceRef.current);
+      finderDebounceRef.current = null;
+    }
+
+    const trimmed = finderQuery.trim();
+
+    if (!trimmed) {
+      setFinderResults([]);
+      setFinderError(null);
+      setFinderLoading(false);
+      return;
+    }
+
+    const token = tokenRef.current;
+    if (!token) {
+      setFinderError('Authentication required');
+      setFinderLoading(false);
+      return;
+    }
+
+    setFinderLoading(true);
+    setFinderError(null);
+
+    const currentQuery = trimmed;
+    finderDebounceRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${apiUrl('users/search')}?q=${encodeURIComponent(currentQuery)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Search failed');
+        }
+
+        const results: SearchUserResult[] = (data.users ?? []).filter(
+          (candidate: SearchUserResult) => candidate.id !== user?.id
+        );
+        setFinderResults(results);
+      } catch (err: any) {
+        console.error(err);
+        setFinderError(err?.message || 'Unable to search users');
+        setFinderResults([]);
+      } finally {
+        setFinderLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (finderDebounceRef.current) {
+        clearTimeout(finderDebounceRef.current);
+        finderDebounceRef.current = null;
+      }
+    };
+  }, [finderQuery, isNewConversationOpen, user?.id]);
+
+  useEffect(
+    () => () => {
+      if (finderDebounceRef.current) {
+        clearTimeout(finderDebounceRef.current);
+      }
+    },
+    []
+  );
+
+  const fetchConversations = useCallback(
+    async (token: string) => {
+      if (!user?.id) return;
+      setConversationsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(apiUrl('chat/conversations'), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+        console.log("conversations data",data);
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to load conversations');
+        }
+
+        const summaries: Record<string, ApiConversation> = {};
+        (data.conversations ?? []).forEach((conversation: ApiConversation) => {
+          summaries[conversation.id] = conversation;
+        });
+
+        setConversationSummaries(summaries);
+      } catch (err: any) {
+        console.error(err);
+        setError(err?.message || 'Unable to load conversations');
+      } finally {
+        setConversationsLoading(false);
+      }
+    },
+    [user?.id]
+  );
+
+  const fetchConversation = useCallback(
+    async (conversationId: string, token: string) => {
+      if (!user?.id) return null;
+      try {
+        const response = await fetch(
+          apiUrl(`chat/conversations/${conversationId}`),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to load conversation');
+        }
+
+        const conversation: ApiConversation = data.conversation;
+        setConversationSummaries((prev) => ({
+          ...prev,
+          [conversationId]: conversation,
+        }));
+        return conversation;
+      } catch (err) {
+        console.error(err);
+        return null;
+      }
+    },
+    [user?.id]
+  );
+
+  const handleStartConversation = useCallback(
+    async (target: SearchUserResult) => {
+      if (!user?.id) return;
+
+      const existing = getDirectConversationWith(target.id);
+      if (existing) {
+        handleNewConversationOpenChange(false);
+        setSelectedConversationId(existing.id);
+        return;
+      }
+
+      const token = tokenRef.current;
+      if (!token) {
+        setFinderError('Authentication required');
+        return;
+      }
+
+      setFinderError(null);
+      setCreatingConversationFor(target.id);
+
+      try {
+        const response = await fetch(apiUrl('chat/conversations'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            participantIds: [target.id],
+            isGroup: false,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to create conversation');
+        }
+
+        if (data.conversation) {
+          const conversation: ApiConversation = data.conversation;
+          setConversationSummaries((prev) => ({
+            ...prev,
+            [conversation.id]: conversation,
+          }));
+          setMessagesMap((prev) => ({
+            ...prev,
+            [conversation.id]: [],
+          }));
+          setSelectedConversationId(conversation.id);
+        } else if (data.message?.conversationId) {
+          await fetchConversation(data.message.conversationId, token);
+          setSelectedConversationId(data.message.conversationId);
+        } else if (data.id) {
+          await fetchConversation(data.id, token);
+          setSelectedConversationId(data.id);
+        }
+
+        handleNewConversationOpenChange(false);
+      } catch (err: any) {
+        console.error(err);
+        setFinderError(err?.message || 'Unable to start conversation');
+      } finally {
+        setCreatingConversationFor(null);
+      }
+    },
+    [
+      fetchConversation,
+      getDirectConversationWith,
+      handleNewConversationOpenChange,
+      user?.id,
+    ]
+  );
+
+  const markConversationAsRead = useCallback(
+    async (conversationId: string, token: string) => {
+      if (!user?.id) return;
+      const messages = messagesMapRef.current[conversationId] ?? [];
+      if (messages.length === 0) return;
+      const lastMessage = messages[messages.length - 1];
+
+      try {
+        const response = await fetch(
+          apiUrl(`chat/conversations/${conversationId}/read`),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              lastMessageId: lastMessage.id,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok && data.conversation) {
+          setConversationSummaries((prev) => ({
+            ...prev,
+            [conversationId]: data.conversation,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to mark conversation read', err);
+      }
+    },
+    [user?.id]
+  );
+
+  const fetchMessages = useCallback(
+    async (conversationId: string, token: string) => {
+      if (!user?.id) return;
+      setMessagesLoading(true);
+      try {
+        const response = await fetch(
+          apiUrl(`chat/conversations/${conversationId}/messages`),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.message || 'Failed to load messages');
+        }
+
+        const existingConversation =
+          conversationSummariesRef.current[conversationId] ?? null;
+
+        const resolvedConversation =
+          existingConversation ?? (await fetchConversation(conversationId, token));
+
+        if (!resolvedConversation) {
+          return;
+        }
+
+        const safeConversation = resolvedConversation;
+
+        const mappedMessages: ViewMessage[] = (data.messages ?? []).map(
+          (message: ApiMessage) =>
+            mapMessageToView(message, safeConversation, user.id)
+        );
+
+        setMessagesMap((prev) => ({
+          ...prev,
+          [conversationId]: mappedMessages,
+        }));
+
+        await markConversationAsRead(conversationId, token);
+      } catch (err: any) {
+        console.error(err);
+        setError(err?.message || 'Unable to load messages');
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [user?.id, fetchConversation, markConversationAsRead]
+  );
+
+  const handleIncomingMessage = useCallback(
+    async (message: ApiMessage) => {
+      if (!user?.id) return;
+      const token = tokenRef.current;
+      if (!token) return;
+
+      const existingConversation =
+        conversationSummariesRef.current[message.conversationId] ?? null;
+
+      const resolvedConversation =
+        existingConversation ??
+        (await fetchConversation(message.conversationId, token));
+
+      if (!resolvedConversation) return;
+
+      const safeConversation = resolvedConversation;
+
+      const mappedMessage = mapMessageToView(message, safeConversation, user.id);
+
+      setMessagesMap((prev) => {
+        const existing = prev[message.conversationId] ?? [];
+        if (existing.some((item) => item.id === mappedMessage.id)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [message.conversationId]: [...existing, mappedMessage],
+        };
+      });
+
+      const isActive =
+        selectedConversationIdRef.current === message.conversationId;
+
+      if (isActive && message.senderId !== user.id) {
+        await markConversationAsRead(message.conversationId, token);
+      }
+    },
+    [fetchConversation, markConversationAsRead, user?.id]
+  );
+
+  const handleConversationUpdated = useCallback(
+    async ({ conversationId }: { conversationId: string }) => {
+      const token = tokenRef.current;
+      if (!token) return;
+      await fetchConversation(conversationId, token);
+    },
+    [fetchConversation]
+  );
+
+  const handleConversationReadEvent = useCallback(
+    async ({ conversationId }: { conversationId: string }) => {
+      const token = tokenRef.current;
+      if (!token) return;
+      await fetchConversation(conversationId, token);
+    },
+    [fetchConversation]
+  );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (initializedRef.current) return;
+
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      setError('Please sign in to use chat');
+      return;
+    }
+
+    tokenRef.current = token;
+    initializedRef.current = true;
+
+    fetchConversations(token);
+
+    const socketInstance = io(API_URL, {
+      auth: { token },
+    });
+
+    socketRef.current = socketInstance;
+
+    socketInstance.on('connect', () => setSocketConnected(true));
+    socketInstance.on('disconnect', () => setSocketConnected(false));
+
+    socketInstance.on('message:new', handleIncomingMessage);
+    socketInstance.on('conversation:updated', handleConversationUpdated);
+    socketInstance.on('conversation:read', handleConversationReadEvent);
+
+    return () => {
+      initializedRef.current = false;
+      socketInstance.off('message:new', handleIncomingMessage);
+      socketInstance.off('conversation:updated', handleConversationUpdated);
+      socketInstance.off('conversation:read', handleConversationReadEvent);
+      socketInstance.disconnect();
+    };
+  }, [
+    user?.id,
+    fetchConversations,
+    handleIncomingMessage,
+    handleConversationUpdated,
+    handleConversationReadEvent,
+  ]);
+
+  useEffect(() => {
+    const token = tokenRef.current;
+    if (!selectedConversationId || !token || !user?.id) return;
+
+    socketRef.current?.emit('conversation:join', selectedConversationId);
+
+    if (!messagesMapRef.current[selectedConversationId]) {
+      fetchMessages(selectedConversationId, token);
+    } else {
+      markConversationAsRead(selectedConversationId, token);
+    }
+
+    return () => {
+      socketRef.current?.emit('conversation:leave', selectedConversationId);
+    };
+  }, [
+    selectedConversationId,
+    fetchMessages,
+    markConversationAsRead,
+    user?.id,
+  ]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedConversationId || !user?.id) return;
+    const token = tokenRef.current;
+    if (!token) {
+      setError('Authentication required to send messages.');
+      return;
+    }
+
+    const tempMessageId = `temp-${Date.now()}`;
+    const optimisticMessage: ViewMessage = {
+      id: tempMessageId,
+      senderId: String(user.id),
       senderName: 'You',
       content: newMessage,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       type: 'text',
       status: 'sent',
-      isOwn: true
+      isOwn: true,
+      createdAt: new Date().toISOString(),
     };
 
-    const updatedConversation = {
-      ...selectedConversation,
-      messages: [...selectedConversation.messages, message],
-      lastMessage: newMessage,
-      lastMessageTime: 'now'
-    };
-
-    setConversations(conversations.map(conv => 
-      conv.id === selectedConversation.id ? updatedConversation : conv
-    ));
-    setSelectedConversation(updatedConversation);
+    setMessagesMap((prev) => {
+      const existing = prev[selectedConversationId] ?? [];
+      return {
+        ...prev,
+        [selectedConversationId]: [...existing, optimisticMessage],
+      };
+    });
     setNewMessage('');
+
+    try {
+      const response = await fetch(
+        apiUrl(`chat/conversations/${selectedConversationId}/messages`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content: optimisticMessage.content,
+            contentType: 'text',
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || 'Failed to send message');
+      }
+
+      if (data.conversation) {
+        setConversationSummaries((prev) => ({
+          ...prev,
+          [data.conversation.id]: data.conversation,
+        }));
+      }
+
+      if (data.message && user?.id) {
+        const summary =
+          (data.conversation as ApiConversation) ||
+          conversationSummariesRef.current[selectedConversationId];
+        if (!summary) return;
+        const mappedMessage = mapMessageToView(
+          data.message as ApiMessage,
+          summary,
+          user.id
+        );
+        setMessagesMap((prev) => ({
+          ...prev,
+          [selectedConversationId]: [
+            ...(prev[selectedConversationId]?.filter(
+              (message) =>
+                message.id !== tempMessageId &&
+                message.id !== (data.message as ApiMessage).id
+            ) ?? []),
+            mappedMessage,
+          ],
+        }));
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to send message');
+      setMessagesMap((prev) => ({
+        ...prev,
+        [selectedConversationId]:
+          prev[selectedConversationId]?.filter(
+            (message) => message.id !== tempMessageId
+          ) ?? [],
+      }));
+      setNewMessage(optimisticMessage.content);
+    }
   };
 
-
-
-  const filteredConversations = conversations.filter(conv =>
+  const filteredConversations = conversationList.filter((conv) =>
     conv.participantName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -279,10 +1016,51 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
     }
   };
 
+  if (!user) {
   return (
-    <div className={`h-full flex overflow-hidden ${isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'}`}>
+      <div
+        className={`h-full flex items-center justify-center ${
+          isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'
+        }`}
+      >
+        <div className="text-center">
+          <MessageSquare
+            className={`w-16 h-16 mx-auto mb-4 ${
+              isDashboardDarkMode ? 'text-gray-600' : 'text-gray-400'
+            }`}
+          />
+          <h3
+            className={`font-title text-xl font-semibold mb-2 ${
+              isDashboardDarkMode ? 'text-white' : 'text-gray-900'
+            }`}
+          >
+            Sign in to chat
+          </h3>
+          <p
+            className={
+              isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'
+            }
+          >
+            Please sign in to start messaging your connections.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+    <div
+      className={`h-full flex overflow-hidden ${
+        isDashboardDarkMode ? 'bg-[#171717]' : 'bg-gray-50'
+      }`}
+    >
       {/* Sidebar */}
-      <div className={`w-80 border-r flex flex-col h-full ${isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+      <div
+        className={`w-80 border-r flex flex-col h-full ${
+          isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        }`}
+      >
           {/* Header */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
@@ -290,9 +1068,22 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
                 <div className="p-2 rounded-full bg-[#FF8D28]/20">
                   <MessageSquare className="w-5 h-5 text-[#FF8D28]" />
                 </div>
-                <h1 className={`font-title text-xl font-bold ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <div>
+                <h1
+                  className={`font-title text-xl font-bold ${
+                    isDashboardDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
                   Messages
                 </h1>
+                <p
+                  className={`text-xs ${
+                    socketConnected ? 'text-green-500' : 'text-gray-500'
+                  }`}
+                >
+                  {socketConnected ? 'Connected' : 'Connecting...'}
+                </p>
+              </div>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -315,7 +1106,11 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
 
             {/* Search */}
             <div className="relative">
-              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            <Search
+              className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
+                isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}
+            />
               <Input
                 placeholder="Search conversations..."
                 value={searchTerm}
@@ -325,19 +1120,33 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
             </div>
           </div>
 
-          {/* Chat List with natural flow */}
+        {/* Chat List */}
           <div className="flex-1 flex flex-col min-h-0">
             <ScrollArea className="flex-1">
               <div className="space-y-2 px-1 py-2">
+              {conversationsLoading && (
+                <div className="text-sm text-muted-foreground px-4 py-6 text-center">
+                  Loading conversations...
+                </div>
+              )}
+              {!conversationsLoading && filteredConversations.length === 0 && (
+                <div className="text-center text-sm text-muted-foreground px-4 py-6">
+                  No conversations found.
+                </div>
+              )}
                 {filteredConversations.map((conversation) => (
                   <div
                     key={conversation.id}
                     className={`p-2 rounded-lg cursor-pointer transition-colors relative ${
-                      selectedConversation?.id === conversation.id
-                        ? isDashboardDarkMode ? 'bg-gray-700' : 'bg-blue-50 border border-blue-200'
-                        : isDashboardDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-                    }`}
-                    onClick={() => setSelectedConversation(conversation)}
+                    selectedConversationId === conversation.id
+                      ? isDashboardDarkMode
+                        ? 'bg-gray-700'
+                        : 'bg-blue-50 border border-blue-200'
+                      : isDashboardDarkMode
+                        ? 'hover:bg-gray-700'
+                        : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSelectedConversationId(conversation.id)}
                   >
                     <div className="flex items-start gap-2 w-full">
                       <div className="relative flex-shrink-0">
@@ -354,7 +1163,13 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
                       <div className="flex-1 min-w-0 w-0">
                         <div className="flex items-center justify-between mb-0.5">
                           <div className="flex items-center gap-1 min-w-0 flex-1 max-w-[60%]">
-                            <h4 className={`font-medium text-sm truncate ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          <h4
+                            className={`font-medium text-sm truncate ${
+                              isDashboardDarkMode
+                                ? 'text-white'
+                                : 'text-gray-900'
+                            }`}
+                          >
                               {conversation.participantName}
                             </h4>
                             {(conversation.isPinned || conversation.isMuted) && (
@@ -368,16 +1183,31 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
                               </div>
                             )}
                           </div>
-                          <span className={`text-xs flex-shrink-0 ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <span
+                          className={`text-xs flex-shrink-0 ${
+                            isDashboardDarkMode
+                              ? 'text-gray-400'
+                              : 'text-gray-500'
+                          }`}
+                        >
                             {conversation.lastMessageTime}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-1 w-full">
-                          <p className={`text-xs truncate flex-1 min-w-0 max-w-[75%] ${isDashboardDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        <p
+                          className={`text-xs truncate flex-1 min-w-0 max-w-[75%] ${
+                            isDashboardDarkMode
+                              ? 'text-gray-300'
+                              : 'text-gray-600'
+                          }`}
+                        >
                             {conversation.lastMessage}
                           </p>
                           {conversation.unreadCount > 0 && (
-                            <Badge variant="destructive" className="text-xs h-4 min-w-4 px-1 flex-shrink-0">
+                          <Badge
+                            variant="destructive"
+                            className="text-xs h-4 min-w-4 px-1 flex-shrink-0"
+                          >
                               {conversation.unreadCount}
                             </Badge>
                           )}
@@ -389,14 +1219,11 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
               </div>
             </ScrollArea>
 
-            {/* New Conversation CTA - Natural positioning */}
+          {/* New Conversation CTA */}
             <div className="p-4 border-t border-gray-200 dark:border-gray-700">
               <Button 
                 className="w-full bg-[#FF8D28] hover:bg-[#FF8D28]/90 text-white font-medium"
-                onClick={() => {
-                  // Handle new conversation action
-                  console.log('New conversation clicked');
-                }}
+              onClick={() => setIsNewConversationOpen(true)}
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 New Conversation
@@ -407,28 +1234,44 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col h-full min-w-0">
-        {selectedConversation ? (
+        {selectedConversationView ? (
           <>
             {/* Chat Header */}
-            <div className={`p-4 border-b flex items-center justify-between flex-shrink-0 ${isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div
+              className={`p-4 border-b flex items-center justify-between flex-shrink-0 ${
+                isDashboardDarkMode
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              }`}
+            >
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <Avatar className="w-10 h-10">
-                      <AvatarImage src={selectedConversation.participantAvatar} />
+                    <AvatarImage src={selectedConversationView.participantAvatar} />
                       <AvatarFallback>
-                        {selectedConversation.participantName.charAt(0)}
+                      {selectedConversationView.participantName.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="absolute -bottom-1 -right-1">
-                      {getStatusIcon(selectedConversation.participantStatus)}
+                    {getStatusIcon(selectedConversationView.participantStatus)}
                     </div>
                   </div>
                   <div>
-                    <h2 className={`font-medium ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {selectedConversation.participantName}
+                  <h2
+                    className={`font-medium ${
+                      isDashboardDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}
+                  >
+                    {selectedConversationView.participantName}
                     </h2>
-                    <p className={`text-sm ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {selectedConversation.participantStatus === 'online' ? 'Active now' : 'Last seen recently'}
+                  <p
+                    className={`text-sm ${
+                      isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'
+                    }`}
+                  >
+                    {selectedConversationView.participantStatus === 'online'
+                      ? 'Active now'
+                      : 'Last seen recently'}
                     </p>
                   </div>
                 </div>
@@ -450,35 +1293,64 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
             <div className="flex-1 min-h-0 overflow-hidden">
               <ScrollArea className="h-full">
                 <div className="p-4 space-y-4">
-                  {selectedConversation.messages.map((message) => (
+                  {messagesLoading && conversationMessages.length === 0 ? (
+                    <div className="flex justify-center py-10 text-sm text-muted-foreground">
+                      Loading messages...
+                    </div>
+                  ) : (
+                    conversationMessages.map((message) => (
                     <div
                       key={message.id}
                       className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className={`max-w-xs lg:max-w-md ${message.isOwn ? 'order-2' : 'order-1'}`}>
-                        <div className={`p-3 rounded-lg ${
+                        <div
+                          className={`max-w-xs lg:max-w-md ${
+                            message.isOwn ? 'order-2' : 'order-1'
+                          }`}
+                        >
+                          <div
+                            className={`p-3 rounded-lg ${
                           message.isOwn
                             ? 'bg-[#FF8D28] text-white'
-                            : isDashboardDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'
-                        }`}>
+                                : isDashboardDarkMode
+                                  ? 'bg-gray-700 text-white'
+                                  : 'bg-gray-100 text-gray-900'
+                            }`}
+                          >
                           <p className="text-sm">{message.content}</p>
                         </div>
-                        <div className={`flex items-center gap-1 mt-1 text-xs ${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-500'} ${
-                          message.isOwn ? 'justify-end' : 'justify-start'
-                        }`}>
+                          <div
+                            className={`flex items-center gap-1 mt-1 text-xs ${
+                              isDashboardDarkMode
+                                ? 'text-gray-400'
+                                : 'text-gray-500'
+                            } ${message.isOwn ? 'justify-end' : 'justify-start'}`}
+                          >
                           <span>{message.timestamp}</span>
                           {message.isOwn && getMessageStatusIcon(message.status)}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    ))
+                  )}
+                  {error && (
+                    <div className="text-center text-sm text-red-500 py-4">
+                      {error}
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
             </div>
 
             {/* Message Input */}
-            <div className={`p-4 border-t flex-shrink-0 ${isDashboardDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div
+              className={`p-4 border-t flex-shrink-0 ${
+                isDashboardDarkMode
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              }`}
+            >
               <div className="flex items-end gap-2">
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <Paperclip className="h-4 w-4" />
@@ -514,13 +1386,29 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
             </div>
           </>
         ) : (
-          <div className={`flex-1 flex items-center justify-center ${isDashboardDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
+          <div
+            className={`flex-1 flex items-center justify-center ${
+              isDashboardDarkMode ? 'bg-gray-800' : 'bg-gray-50'
+            }`}
+          >
             <div className="text-center">
-              <MessageSquare className={`w-16 h-16 mx-auto mb-4 ${isDashboardDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-              <h3 className={`font-title text-xl font-semibold mb-2 ${isDashboardDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <MessageSquare
+                className={`w-16 h-16 mx-auto mb-4 ${
+                  isDashboardDarkMode ? 'text-gray-600' : 'text-gray-400'
+                }`}
+              />
+              <h3
+                className={`font-title text-xl font-semibold mb-2 ${
+                  isDashboardDarkMode ? 'text-white' : 'text-gray-900'
+                }`}
+              >
                 Select a Conversation
               </h3>
-              <p className={`${isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p
+                className={
+                  isDashboardDarkMode ? 'text-gray-400' : 'text-gray-600'
+                }
+              >
                 Choose a conversation from the sidebar to start messaging.
               </p>
             </div>
@@ -528,6 +1416,146 @@ export function ChatPage({ isDashboardDarkMode = false }: ChatPageProps) {
         )}
       </div>
     </div>
+      <Dialog
+        open={isNewConversationOpen}
+        onOpenChange={handleNewConversationOpenChange}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Start a new conversation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p
+              className={`text-sm ${
+                isDashboardDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}
+            >
+              Search by username, email, or phone number to find people to chat
+              with.
+            </p>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                ref={finderInputRef}
+                value={finderQuery}
+                onChange={(event) => setFinderQuery(event.target.value)}
+                placeholder="Search users..."
+                className="pl-10"
+              />
+            </div>
+            {finderError && (
+              <p className="text-sm text-destructive">{finderError}</p>
+            )}
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {finderLoading ? (
+                <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted-foreground rounded-md border border-dashed">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Searching users…
+                </div>
+              ) : null}
+              {!finderLoading &&
+              finderResults.length === 0 &&
+              finderQuery.trim().length >= 2 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground border border-dashed rounded-md">
+                  No users found matching “{finderQuery.trim()}”.
+                </div>
+              ) : null}
+              {finderResults.map((result) => {
+                const existingConversation = Object.values(
+                  conversationSummaries
+                ).find(
+                  (conversation) =>
+                    !conversation.isGroup &&
+                    conversation.participants.some(
+                      (participant) => participant.userId === result.id
+                    )
+                );
+                const isCreating = creatingConversationFor === result.id;
+                const subtitleParts = [
+                  result.username,
+                  result.email,
+                  result.phone,
+                ].filter(Boolean);
+                const primaryLabel =
+                  result.displayName ||
+                  result.fullName ||
+                  result.username ||
+                  'Unnamed user';
+
+                return (
+                  <button
+                    key={result.id}
+                    type="button"
+                    onClick={() => handleStartConversation(result)}
+                    disabled={isCreating}
+                    className={[
+                      'w-full text-left rounded-xl border px-4 py-3 transition-all',
+                      'flex items-center gap-4 shadow-sm',
+                      existingConversation
+                        ? 'border-amber-400/70 bg-amber-50 dark:bg-amber-500/10'
+                        : isDashboardDarkMode
+                          ? 'border-gray-700 bg-gray-800 hover:border-[#FF8D28]'
+                          : 'border-gray-200 bg-white hover:border-[#FF8D28]',
+                      isCreating ? 'opacity-70 pointer-events-none' : '',
+                    ].join(' ')}
+                  >
+                    <Avatar className="h-12 w-12 ring-2 ring-white dark:ring-transparent shadow-sm">
+                      <AvatarImage src={result.avatarUrl ?? undefined} />
+                      <AvatarFallback className="text-base">
+                        {primaryLabel.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p
+                          className={`font-medium ${
+                            isDashboardDarkMode ? 'text-white' : 'text-gray-900'
+                          }`}
+                        >
+                          {primaryLabel}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          {existingConversation ? (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs uppercase tracking-wide"
+                            >
+                              In your chats
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-xs uppercase tracking-wide border-[#FF8D28] text-[#FF8D28]"
+                            >
+                              New chat
+                            </Badge>
+                          )}
+                          {isCreating ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : null}
+                        </div>
+                      </div>
+                      {subtitleParts.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {subtitleParts.map((part) => (
+                            <span
+                              key={part}
+                              className="rounded-full bg-muted px-2 py-0.5"
+                            >
+                              {part}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
