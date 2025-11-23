@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, ArrowLeft, Check, Crown, Users, Star, Zap, Target } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Check, Crown, Users, Star, Zap, Target, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +48,13 @@ function AuthPageContent() {
   const [paymentDetails, setPaymentDetails] = useState<{ orderId: string; razorpayOrderId: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -485,6 +492,129 @@ function AuthPageContent() {
     setSignupStep("form");
   };
 
+  const handleVerifyEmail = async () => {
+    if (!formData.email) {
+      toast.error("Please enter your email address");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    setSendingOtp(true);
+    setOtpError("");
+
+    try {
+      const response = await fetch(apiUrl('otp/send'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          otp_type: mode === 'signup' ? 'signup' : 'email_verification',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOtpSent(true);
+        setShowOtpModal(true);
+        toast.success("OTP sent to your email!");
+      } else {
+        setOtpError(data.message || "Failed to send OTP");
+        toast.error(data.message || "Failed to send OTP");
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      setOtpError("Failed to send OTP. Please try again.");
+      toast.error("Failed to send OTP. Please try again.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setOtpError("Please enter a valid 6-digit OTP code");
+      return;
+    }
+
+    setVerifyingOtp(true);
+    setOtpError("");
+
+    try {
+      const response = await fetch(apiUrl('otp/verify'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          otp_code: otpCode,
+          otp_type: mode === 'signup' ? 'signup' : 'email_verification',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOtpVerified(true);
+        setShowOtpModal(false);
+        setOtpCode("");
+        toast.success("Email verified successfully!");
+      } else {
+        setOtpError(data.message || "Invalid OTP code");
+        toast.error(data.message || "Invalid OTP code");
+      }
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      setOtpError("Failed to verify OTP. Please try again.");
+      toast.error("Failed to verify OTP. Please try again.");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setSendingOtp(true);
+    setOtpError("");
+
+    try {
+      const response = await fetch(apiUrl('otp/resend'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          otp_type: mode === 'signup' ? 'signup' : 'email_verification',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOtpCode("");
+        toast.success("OTP resent to your email!");
+      } else {
+        setOtpError(data.message || "Failed to resend OTP");
+        toast.error(data.message || "Failed to resend OTP");
+      }
+    } catch (error) {
+      console.error('Error resending OTP:', error);
+      setOtpError("Failed to resend OTP. Please try again.");
+      toast.error("Failed to resend OTP. Please try again.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   // Subscription selection step for signup
   const renderSubscriptionSelection = () => (
     <div className="bg-gray-50 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
@@ -722,16 +852,61 @@ function AuthPageContent() {
 
               <div>
                 <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    handleInputChange("email", e.target.value)
-                  }
-                  placeholder="Enter your email"
-                  required
-                />
+                {mode === "signup" ? (
+                  <div className="flex gap-2">
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => {
+                        handleInputChange("email", e.target.value);
+                        setOtpVerified(false);
+                        setOtpSent(false);
+                      }}
+                      placeholder="Enter your email"
+                      required
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleVerifyEmail}
+                      disabled={!formData.email || sendingOtp || otpVerified}
+                      className="whitespace-nowrap"
+                    >
+                      {sendingOtp ? (
+                        "Sending..."
+                      ) : otpVerified ? (
+                        <>
+                          <Check className="w-4 h-4 mr-1" />
+                          Verified
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-4 h-4 mr-1" />
+                          Verify Email
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) =>
+                      handleInputChange("email", e.target.value)
+                    }
+                    placeholder="Enter your email"
+                    required
+                  />
+                )}
+                {mode === "signup" && otpVerified && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center">
+                    <Check className="w-3 h-3 mr-1" />
+                    Email verified successfully
+                  </p>
+                )}
               </div>
 
               <div>
@@ -885,6 +1060,81 @@ function AuthPageContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* OTP Verification Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-title">Verify Your Email</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setShowOtpModal(false);
+                    setOtpCode("");
+                    setOtpError("");
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                We've sent a 6-digit verification code to <strong>{formData.email}</strong>. 
+                Please enter the code below.
+              </p>
+
+              <div>
+                <Label htmlFor="otp">Enter Verification Code</Label>
+                <Input
+                  id="otp"
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setOtpCode(value);
+                    setOtpError("");
+                  }}
+                  placeholder="000000"
+                  maxLength={6}
+                  className="text-center text-2xl tracking-widest font-mono"
+                  autoFocus
+                />
+                {otpError && (
+                  <p className="text-xs text-red-600 mt-1">{otpError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResendOtp}
+                  disabled={sendingOtp}
+                  className="flex-1"
+                >
+                  {sendingOtp ? "Sending..." : "Resend Code"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleVerifyOtp}
+                  disabled={otpCode.length !== 6 || verifyingOtp}
+                  className="flex-1 bg-[#FF8D28] hover:bg-[#FF8D28]/90"
+                >
+                  {verifyingOtp ? "Verifying..." : "Verify"}
+                </Button>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                Didn't receive the code? Check your spam folder or click "Resend Code".
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

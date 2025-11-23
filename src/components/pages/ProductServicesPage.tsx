@@ -21,61 +21,7 @@ import { ProductAndServicesListingForm } from '../forms/ProductAndServicesListin
 import { useRouter } from 'next/navigation';
 import { apiUrl } from '@/utils/api';
 
-// Mock data and functions until the data service is restored
-const sampleProducts: ProductService[] = [
-    {
-      id: '1',
-      title: 'Professional Logo Design',
-      description: 'Custom logo design for your brand with multiple revisions and file formats',
-      type: 'service',
-      vendor: 'Sarah Chen',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 299,
-      currency: 'USD',
-      rating: 4.9,
-      totalReviews: 127,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      location: 'New York',
-      deliveryTime: '3-5 days',
-      userId: '1'
-    },
-    {
-      id: '2',
-      title: 'Web Design Template Pack',
-      description: 'Premium web design templates for modern businesses',
-      type: 'product',
-      vendor: 'Design Studio Pro',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 99,
-      currency: 'USD',
-      rating: 4.7,
-      totalReviews: 89,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      deliveryTime: 'Instant Download',
-      userId: '2'
-    },
-    {
-      id: '3',
-      title: 'Video Editing Service',
-      description: 'Professional video editing for content creators and businesses',
-      type: 'service',
-      vendor: 'Mike Rodriguez',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 199,
-      currency: 'USD',
-      rating: 4.8,
-      totalReviews: 156,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      location: 'Los Angeles',
-      deliveryTime: '2-3 days',
-      userId: '3'
-    }
-  ];
-
-// We'll fetch directly from API in the component
+// Fetch directly from API - no mock data fallback
 
 const productFilterConfig: FilterConfig = {
     categories: [
@@ -229,13 +175,13 @@ export function ProductServicesPage({ isDashboardDarkMode = false }: ProductServ
         setProducts(filteredProducts);
       } else {
         console.error('Failed to fetch products');
-        // Fallback to sample data if API fails
-        setProducts(sampleProducts);
+        // No fallback - show empty state if API fails
+        setProducts([]);
       }
     } catch (error) {
       console.error('Error loading products:', error);
-      // Fallback to sample data if API fails
-      setProducts(sampleProducts);
+      // No fallback - show empty state if API fails
+      setProducts([]);
     } finally {
       setLoading(false);
     }

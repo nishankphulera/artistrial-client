@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,7 @@ interface TicketType {
 
 export const TicketListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<TicketFormData>({
     title: '',
     eventType: '',
@@ -333,6 +335,12 @@ export const TicketListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
       if (response.ok) {
         toast.success('Event listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
+        
+        // Redirect to tickets page
+        setTimeout(() => {
+          router.push('/tickets');
+        }, 1000);
+        
         if (onClose) onClose();
       } else {
         const errorData = await response.json();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,6 +54,7 @@ interface TalentFormData {
 
 export const TalentListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<TalentFormData>({
     title: '',
@@ -271,6 +273,12 @@ export const TalentListingForm: React.FC<{ onClose?: () => void }> = ({ onClose 
         
         toast.success('Talent listing created successfully!');
         setHasUnsavedChanges(false);
+        
+        // Redirect to talent marketplace
+        setTimeout(() => {
+          router.push('/marketplace/talent');
+        }, 1000);
+        
         if (onClose) onClose();
         // Reset form
         setFormData({

@@ -21,77 +21,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { ImageWithFallback } from '@/components/figma/ImageWithFallback';
 import { ProductAndServicesListingForm } from '@/components/forms/ProductAndServicesListingForm';
 import { useRouter } from 'next/navigation';
-
-// Mock data and functions until the data service is restored
-const sampleProducts: ProductService[] = [
-    {
-      id: '1',
-      title: 'Professional Logo Design',
-      description: 'Custom logo design for your brand with multiple revisions and file formats',
-      type: 'service',
-      vendor: 'Sarah Chen',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 299,
-      currency: 'USD',
-      rating: 4.9,
-      totalReviews: 127,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      location: 'New York',
-      deliveryTime: '3-5 days',
-      userId: '1'
-    },
-    {
-      id: '2',
-      title: 'Web Design Template Pack',
-      description: 'Premium web design templates for modern businesses',
-      type: 'product',
-      vendor: 'Design Studio Pro',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 99,
-      currency: 'USD',
-      rating: 4.7,
-      totalReviews: 89,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      deliveryTime: 'Instant Download',
-      userId: '2'
-    },
-    {
-      id: '3',
-      title: 'Video Editing Service',
-      description: 'Professional video editing for content creators and businesses',
-      type: 'service',
-      vendor: 'Mike Rodriguez',
-      vendorAvatar: '/api/placeholder/150/150',
-      price: 199,
-      currency: 'USD',
-      rating: 4.8,
-      totalReviews: 156,
-      images: ['/api/placeholder/400/300'],
-      availability: 'Available',
-      location: 'Los Angeles',
-      deliveryTime: '2-3 days',
-      userId: '3'
-    }
-  ];
-
-const useProductData = () => ({
-  fetchProductServices: async (filters: ProductFilters, context: any) => {
-    console.log("Fetching products with filters:", filters, "and context:", context);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return sampleProducts.filter(p => {
-        let match = true;
-        if (filters.searchTerm && !p.title.toLowerCase().includes(filters.searchTerm.toLowerCase())) {
-            match = false;
-        }
-        if (filters.type !== 'all' && p.type !== filters.type) {
-            match = false;
-        }
-        return match;
-    });
-  }
-});
+import { apiUrl } from '@/utils/api';
 
 const productFilterConfig: FilterConfig = {
     categories: [
@@ -143,9 +73,8 @@ interface ProductFilters extends FilterState {
 export default function ProductServicesPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { fetchProductServices } = useProductData();
   const [products, setProducts] = useState<ProductService[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductService | null>(null);
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
@@ -178,13 +107,62 @@ export default function ProductServicesPage() {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const data = await fetchProductServices(filters, { 
-        context: 'public',
-        userId: user?.id 
-      });
-      setProducts(data);
+      
+      // Build query parameters from filters
+      const params = new URLSearchParams();
+      
+      // Use search endpoint if there's a search term
+      const endpoint = filters.searchTerm 
+        ? apiUrl('product-services/search')
+        : apiUrl('product-services');
+      
+      if (filters.searchTerm) params.append('q', filters.searchTerm);
+      if (Array.isArray(filters.category) && filters.category.length > 0) {
+        params.append('category', filters.category[0]);
+      }
+      if (filters.location && filters.location !== 'all') {
+        params.append('location', filters.location);
+      }
+      if (filters.type && filters.type !== 'all') {
+        const format = filters.type === 'service' ? 'service' : (filters.type === 'product' ? 'digital' : filters.type);
+        params.append('format', format);
+      }
+      if (filters.priceRange) {
+        params.append('min_price', filters.priceRange[0].toString());
+        params.append('max_price', filters.priceRange[1].toString());
+      }
+      if (filters.sortBy) params.append('sort', filters.sortBy);
+      params.append('status', 'active');
+      params.append('limit', '50');
+
+      const response = await fetch(`${endpoint}?${params}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        let productsArray = Array.isArray(data) ? data : (data.products || data.data || []);
+        
+        // Normalize API data to match ProductService interface
+        productsArray = productsArray.map((product: any) => ({
+          ...product,
+          vendor: product.vendor || product.display_name || product.username || 'Vendor',
+          vendorAvatar: product.vendorAvatar || product.avatar_url,
+          price: typeof product.price === 'string' ? parseFloat(product.price) : (product.price || 0),
+          rating: product.rating || 0,
+          totalReviews: product.totalReviews || product.total_reviews || 0,
+          images: product.images || [],
+          availability: product.availability || product.status || 'Available',
+        }));
+        
+        setProducts(productsArray);
+      } else {
+        console.error('Failed to fetch products');
+        // No fallback - show empty state if API fails
+        setProducts([]);
+      }
     } catch (error) {
       console.error('Error loading products:', error);
+      // No fallback - show empty state if API fails
+      setProducts([]);
     } finally {
       setLoading(false);
     }

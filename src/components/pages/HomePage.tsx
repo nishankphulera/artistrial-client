@@ -160,41 +160,8 @@ export const HomePage: React.FC = () => {
         );
       }
 
-      // Fallback to mock data if API fails
-      const mockArtworks: FeaturedArtwork[] = [
-        {
-          id: "1",
-          title: "Digital Dreams",
-          artist_name: "Sarah Chen",
-          thumbnail_url:
-            "https://images.unsplash.com/photo-1528105308081-c385f68f88bf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwYXJ0JTIwbW9kZXJuJTIwY3JlYXRpdmV8ZW58MXx8fHwxNzU2ODk5NjY1fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-          media_type: "Digital Art",
-          price: 299,
-          currency: "USD",
-        },
-        {
-          id: "2",
-          title: "Color Harmony",
-          artist_name: "Marcus Rivera",
-          thumbnail_url:
-            "https://images.unsplash.com/photo-1717758220144-aae8c59dbd7d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGNvbG9yZnVsJTIwcGFpbnRpbmd8ZW58MXx8fHwxNzU2ODk5NjY5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-          media_type: "Abstract Art",
-          price: 450,
-          currency: "USD",
-        },
-        {
-          id: "3",
-          title: "Future Visions",
-          artist_name: "Emma Thompson",
-          thumbnail_url:
-            "https://images.unsplash.com/photo-1635321856129-af8531379f4b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHwzZCUyMHJlbmRlciUyMGZ1dHVyaXN0aWMlMjBhcnR8ZW58MXx8fHwxNzU2ODk5Njc1fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-          media_type: "3D Render",
-          price: 199,
-          currency: "USD",
-        },
-      ];
-
-      setFeaturedArtworks(mockArtworks);
+      // No fallback - show empty state if API fails
+      setFeaturedArtworks([]);
     } catch (error) {
       console.error("Error fetching featured artworks:", error);
     } finally {
@@ -242,48 +209,8 @@ export const HomePage: React.FC = () => {
         );
       }
 
-      // Fallback to mock data if API fails
-      const mockTalent: FeaturedTalent[] = [
-        {
-          id: "t1",
-          title: "3D Artist & Motion Designer",
-          name: "Alex Rivera",
-          skills: ["3D Modeling", "Motion Graphics", "Blender"],
-          rate: 75,
-          image_url:
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
-          location: "Los Angeles, CA",
-          rating: 4.9,
-        },
-        {
-          id: "t2",
-          title: "UI/UX Designer",
-          name: "Maya Chen",
-          skills: ["UI Design", "Prototyping", "Figma"],
-          rate: 65,
-          image_url:
-            "https://images.unsplash.com/photo-1494790108755-2616b612b64c?w=400",
-          location: "New York, NY",
-          rating: 4.8,
-        },
-        {
-          id: "t3",
-          title: "Brand Identity Designer",
-          name: "Jordan Blake",
-          skills: [
-            "Logo Design",
-            "Brand Strategy",
-            "Illustration",
-          ],
-          rate: 85,
-          image_url:
-            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400",
-          location: "San Francisco, CA",
-          rating: 5.0,
-        },
-      ];
-
-      setFeaturedTalent(mockTalent);
+      // No fallback - show empty state if API fails
+      setFeaturedTalent([]);
     } catch (error) {
       console.error("Error fetching featured talent:", error);
     }
@@ -330,56 +257,8 @@ export const HomePage: React.FC = () => {
         );
       }
 
-      // Fallback to mock data if API fails
-      const mockStudios: FeaturedStudio[] = [
-        {
-          id: "s1",
-          name: "Creative Loft Studio",
-          location: "Brooklyn, NY",
-          price_per_hour: 120,
-          features: [
-            "Natural Light",
-            "4K Camera",
-            "Audio Setup",
-          ],
-          image_url:
-            "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400",
-          rating: 4.8,
-          type: "Photography Studio",
-        },
-        {
-          id: "s2",
-          name: "Sound Labs Recording",
-          location: "Nashville, TN",
-          price_per_hour: 150,
-          features: [
-            "Pro Audio",
-            "Mixing Board",
-            "Instruments",
-          ],
-          image_url:
-            "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400",
-          rating: 4.9,
-          type: "Recording Studio",
-        },
-        {
-          id: "s3",
-          name: "Digital Art Space",
-          location: "Austin, TX",
-          price_per_hour: 85,
-          features: [
-            "High-End PC",
-            "Drawing Tablets",
-            "Software",
-          ],
-          image_url:
-            "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=400",
-          rating: 4.7,
-          type: "Digital Studio",
-        },
-      ];
-
-      setFeaturedStudios(mockStudios);
+      // No fallback - show empty state if API fails
+      setFeaturedStudios([]);
     } catch (error) {
       console.error("Error fetching featured studios:", error);
     }
@@ -408,7 +287,7 @@ export const HomePage: React.FC = () => {
       name: "Book Studios",
       description: "Rent creative workspaces",
       icon: Building,
-      route: "/studios",
+      route: "/marketplace/studios",
       color: "from-green-500 to-emerald-600",
       bgColor: "bg-green-50",
       iconColor: "text-green-600",
@@ -417,7 +296,7 @@ export const HomePage: React.FC = () => {
       name: "Find Investors",
       description: "Connect with funding sources",
       icon: DollarSign,
-      route: "/investors",
+      route: "/marketplace/investors",
       color: "from-yellow-500 to-orange-600",
       bgColor: "bg-yellow-50",
       iconColor: "text-yellow-600",
@@ -426,7 +305,7 @@ export const HomePage: React.FC = () => {
       name: "Event Tickets",
       description: "Discover creative events",
       icon: Calendar,
-      route: "/tickets",
+      route: "/marketplace/tickets",
       color: "from-pink-500 to-rose-600",
       bgColor: "bg-pink-50",
       iconColor: "text-pink-600",
@@ -435,7 +314,7 @@ export const HomePage: React.FC = () => {
       name: "Legal Services",
       description: "Get professional legal help",
       icon: Scale,
-      route: "/legal-services",
+      route: "/marketplace/legal",
       color: "from-gray-500 to-slate-600",
       bgColor: "bg-gray-50",
       iconColor: "text-gray-600",
@@ -444,7 +323,7 @@ export const HomePage: React.FC = () => {
       name: "Product Services",
       description: "Creative business solutions",
       icon: Package,
-      route: "/product-services",
+      route: "/marketplace/products",
       color: "from-indigo-500 to-purple-600",
       bgColor: "bg-indigo-50",
       iconColor: "text-indigo-600",

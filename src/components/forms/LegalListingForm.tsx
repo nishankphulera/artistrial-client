@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,7 @@ interface FlatRateService {
 
 export const LegalListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<LegalFormData>({
     title: '',
     serviceType: '',
@@ -378,6 +380,12 @@ export const LegalListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }
         
         toast.success('Legal services listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
+        
+        // Redirect to legal services page
+        setTimeout(() => {
+          router.push('/legal-services');
+        }, 1000);
+        
         if (onClose) onClose();
       } else {
         const errorData = await response.json();

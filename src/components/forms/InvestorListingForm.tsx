@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,7 @@ interface InvestorFormData {
 
 export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<InvestorFormData>({
     company_name: '',
     bio: '',
@@ -217,6 +219,12 @@ export const InvestorListingForm: React.FC<{ onClose?: () => void }> = ({ onClos
       if (response.ok) {
         toast.success('Investor profile created successfully!');
         setHasUnsavedChanges(false);
+        
+        // Redirect to investors page
+        setTimeout(() => {
+          router.push('/investors');
+        }, 1000);
+        
         if (onClose) onClose();
       } else {
         const errorData = await response.json();

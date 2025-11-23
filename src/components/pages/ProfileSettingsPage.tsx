@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save, User, Upload, MapPin, Globe, Phone, Mail, Building, DollarSign, Briefcase, Palette, Plus, X, Shield, FileText, Camera, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { apiUrl } from '@/utils/api';
+import { uploadImageToS3 } from '@/utils/s3Upload';
 
 interface ProfileFormData {
   username: string;
@@ -88,6 +89,16 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
   const [newFocus, setNewFocus] = useState('');
   const [newSpecialization, setNewSpecialization] = useState('');
   const [newBarAdmission, setNewBarAdmission] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const governmentIdInputRef = useRef<HTMLInputElement>(null);
+  const proofOfAddressInputRef = useRef<HTMLInputElement>(null);
+  const businessRegistrationInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDocuments, setUploadingDocuments] = useState({
+    governmentId: false,
+    proofOfAddress: false,
+    businessRegistration: false
+  });
   
   // KYC state
   const [kycData, setKycData] = useState({
@@ -107,6 +118,47 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
     business_type: '',
     business_registration_url: ''
   });
+
+  const handleDocumentUpload = async (
+    file: File,
+    documentType: 'governmentId' | 'proofOfAddress' | 'businessRegistration'
+  ) => {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please upload a PNG, JPG, or PDF file');
+      return;
+    }
+
+    try {
+      setUploadingDocuments(prev => ({ ...prev, [documentType]: true }));
+      toast.info(`Uploading ${documentType === 'governmentId' ? 'government ID' : documentType === 'proofOfAddress' ? 'proof of address' : 'business registration'}...`);
+      
+      const folder = documentType === 'governmentId' ? 'kyc/government-id' : 
+                     documentType === 'proofOfAddress' ? 'kyc/proof-of-address' : 
+                     'kyc/business-registration';
+      const uploadedUrl = await uploadImageToS3(file, folder);
+      
+      if (documentType === 'governmentId') {
+        setKycData(prev => ({ ...prev, government_id_url: uploadedUrl }));
+      } else if (documentType === 'proofOfAddress') {
+        setKycData(prev => ({ ...prev, proof_of_address_url: uploadedUrl }));
+      } else {
+        setKycData(prev => ({ ...prev, business_registration_url: uploadedUrl }));
+      }
+      
+      toast.success('Document uploaded successfully!');
+    } catch (error) {
+      console.error(`Error uploading ${documentType}:`, error);
+      toast.error('Failed to upload document');
+    } finally {
+      setUploadingDocuments(prev => ({ ...prev, [documentType]: false }));
+    }
+  };
 
   // Fetch profile data
   useEffect(() => {
@@ -572,28 +624,88 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
               <CardContent className="space-y-6">
                 {/* Avatar Section */}
                 <div className="flex items-center gap-6">
-                  <Avatar className="w-24 h-24">
-                    <AvatarImage src={profileData.avatar_url} alt={profileData.full_name} />
-                    <AvatarFallback className="text-xl">
-                      {profileData.full_name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar className="w-24 h-24">
+                      <AvatarImage src={profileData.avatar_url} alt={profileData.full_name} />
+                      <AvatarFallback className="text-xl">
+                        {profileData.full_name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1">
-                    <Label htmlFor="avatar_url">Profile Picture URL</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="avatar_url"
-                        value={profileData.avatar_url}
-                        onChange={(e) => handleInputChange('avatar_url', e.target.value)}
-                        placeholder="https://example.com/your-avatar.jpg"
-                        className="flex-1"
-                      />
-                      <Button variant="outline" size="sm">
-                        <Upload className="w-4 h-4" />
+                    <Label htmlFor="avatar_upload">Profile Picture</Label>
+                    <input
+                      ref={avatarFileInputRef}
+                      id="avatar_upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast.error('Image size must be less than 10MB');
+                            return;
+                          }
+                          // Validate file type
+                          if (!file.type.startsWith('image/')) {
+                            toast.error('Please select a valid image file');
+                            return;
+                          }
+                          try {
+                            setUploadingAvatar(true);
+                            toast.info('Uploading profile picture...');
+                            const uploadedUrl = await uploadImageToS3(file, 'avatars');
+                            handleInputChange('avatar_url', uploadedUrl);
+                            toast.success('Profile picture uploaded successfully!');
+                          } catch (error) {
+                            console.error('Error uploading avatar:', error);
+                            toast.error('Failed to upload profile picture');
+                          } finally {
+                            setUploadingAvatar(false);
+                          }
+                        }
+                      }}
+                    />
+                    <div className="mt-2">
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        disabled={uploadingAvatar}
+                        className="flex items-center gap-2"
+                      >
+                        {uploadingAvatar ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            {profileData.avatar_url ? 'Change Picture' : 'Upload Picture'}
+                          </>
+                        )}
                       </Button>
+                      {profileData.avatar_url && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleInputChange('avatar_url', '')}
+                          className="ml-2 text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Enter a URL to your profile picture or upload an image
+                    <p className="text-xs text-gray-500 mt-2">
+                      Click the button above to select an image from your device (PNG, JPG up to 10MB)
                     </p>
                   </div>
                 </div>
@@ -1150,14 +1262,50 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <p className="text-sm text-gray-600 mb-3">
                       Upload a clear photo of your driver's license, passport, or national ID card
                     </p>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#FF8D28] transition-colors cursor-pointer">
-                      <Camera className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">
-                        Click to upload or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        PNG, JPG, PDF up to 10MB
-                      </p>
+                    <input
+                      ref={governmentIdInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'governmentId');
+                        }
+                      }}
+                    />
+                    <div 
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                        uploadingDocuments.governmentId 
+                          ? 'border-[#FF8D28] bg-[#FF8D28]/5' 
+                          : kycData.government_id_url
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-300 hover:border-[#FF8D28]'
+                      }`}
+                      onClick={() => !uploadingDocuments.governmentId && governmentIdInputRef.current?.click()}
+                    >
+                      {uploadingDocuments.governmentId ? (
+                        <>
+                          <div className="w-8 h-8 border-2 border-[#FF8D28] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">Uploading...</p>
+                        </>
+                      ) : kycData.government_id_url ? (
+                        <>
+                          <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                          <p className="text-sm text-green-600">Document uploaded</p>
+                          <p className="text-xs text-gray-500 mt-1">Click to replace</p>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            PNG, JPG, PDF up to 10MB
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1167,14 +1315,50 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <p className="text-sm text-gray-600 mb-3">
                       Upload a recent utility bill, bank statement, or government correspondence (not older than 3 months)
                     </p>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#FF8D28] transition-colors cursor-pointer">
-                      <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">
-                        Click to upload or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        PNG, JPG, PDF up to 10MB
-                      </p>
+                    <input
+                      ref={proofOfAddressInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'proofOfAddress');
+                        }
+                      }}
+                    />
+                    <div 
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                        uploadingDocuments.proofOfAddress 
+                          ? 'border-[#FF8D28] bg-[#FF8D28]/5' 
+                          : kycData.proof_of_address_url
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-300 hover:border-[#FF8D28]'
+                      }`}
+                      onClick={() => !uploadingDocuments.proofOfAddress && proofOfAddressInputRef.current?.click()}
+                    >
+                      {uploadingDocuments.proofOfAddress ? (
+                        <>
+                          <div className="w-8 h-8 border-2 border-[#FF8D28] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">Uploading...</p>
+                        </>
+                      ) : kycData.proof_of_address_url ? (
+                        <>
+                          <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                          <p className="text-sm text-green-600">Document uploaded</p>
+                          <p className="text-xs text-gray-500 mt-1">Click to replace</p>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            PNG, JPG, PDF up to 10MB
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -1231,14 +1415,50 @@ export const ProfileSettingsPage: React.FC<ProfileSettingsPageProps> = ({
                     <p className="text-sm text-gray-600 mb-3">
                       Upload your certificate of incorporation, business license, or articles of organization
                     </p>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#FF8D28] transition-colors cursor-pointer">
-                      <Building className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">
-                        Click to upload or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        PNG, JPG, PDF up to 10MB
-                      </p>
+                    <input
+                      ref={businessRegistrationInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleDocumentUpload(file, 'businessRegistration');
+                        }
+                      }}
+                    />
+                    <div 
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                        uploadingDocuments.businessRegistration 
+                          ? 'border-[#FF8D28] bg-[#FF8D28]/5' 
+                          : kycData.business_registration_url
+                          ? 'border-green-300 bg-green-50'
+                          : 'border-gray-300 hover:border-[#FF8D28]'
+                      }`}
+                      onClick={() => !uploadingDocuments.businessRegistration && businessRegistrationInputRef.current?.click()}
+                    >
+                      {uploadingDocuments.businessRegistration ? (
+                        <>
+                          <div className="w-8 h-8 border-2 border-[#FF8D28] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">Uploading...</p>
+                        </>
+                      ) : kycData.business_registration_url ? (
+                        <>
+                          <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                          <p className="text-sm text-green-600">Document uploaded</p>
+                          <p className="text-xs text-gray-500 mt-1">Click to replace</p>
+                        </>
+                      ) : (
+                        <>
+                          <Building className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            PNG, JPG, PDF up to 10MB
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>

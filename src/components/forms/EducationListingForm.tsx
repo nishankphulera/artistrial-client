@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,7 @@ interface EducationFormData {
 
 export const EducationListingForm: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<EducationFormData>({
     title: '',
     category: '',
@@ -351,6 +353,12 @@ export const EducationListingForm: React.FC<{ onClose?: () => void }> = ({ onClo
         
         toast.success('Education listing created successfully!');
         setHasUnsavedChanges(false);
+        
+        // Redirect to education page
+        setTimeout(() => {
+          router.push('/education');
+        }, 1000);
+        
         if (onClose) onClose();
         // Reset form
         setFormData({

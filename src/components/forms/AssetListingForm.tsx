@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ interface AssetListingFormProps {
 
 export const AssetListingForm: React.FC<AssetListingFormProps> = ({ onClose, isDashboardDarkMode = false }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<AssetFormData>({
     title: '',
     category: '',
@@ -260,6 +262,12 @@ export const AssetListingForm: React.FC<AssetListingFormProps> = ({ onClose, isD
         
         toast.success('Asset listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
+        
+        // Redirect to marketplace
+        setTimeout(() => {
+          router.push('/marketplace');
+        }, 1000);
+        
         if (onClose) onClose();
         // Reset form
         setFormData({

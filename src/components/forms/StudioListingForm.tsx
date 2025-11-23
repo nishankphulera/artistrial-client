@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,7 @@ interface StudioListingFormProps {
 
 export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, isDashboardDarkMode = false }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<StudioFormData>({
     title: '',
     studioType: '',
@@ -308,6 +310,12 @@ export const StudioListingForm: React.FC<StudioListingFormProps> = ({ onClose, i
       if (response.ok) {
         toast.success('Studio listing created successfully!');
         setHasUnsavedChanges(false); // Clear unsaved changes flag
+        
+        // Redirect to studios page
+        setTimeout(() => {
+          router.push('/studios');
+        }, 1000);
+        
         if (onClose) onClose();
         // Clean up image preview URLs
         imagePreviewsRef.current.forEach(preview => URL.revokeObjectURL(preview));
